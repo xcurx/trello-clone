@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { KanbanBoard } from "@/components/board/KanbanBoard";
+import { BoardWorkspace } from "@/components/board/BoardWorkspace";
 import { CardModal } from "@/components/card/CardModal";
 import { boardService } from "@/lib/services/board.service";
 
@@ -24,9 +24,9 @@ interface PageProps {
 
 export default async function BoardPage({ params }: PageProps) {
   const { boardId } = await params;
-  
+
   const board = await boardService.getById(boardId);
-  
+
   if (!board) {
     notFound();
   }
@@ -34,23 +34,29 @@ export default async function BoardPage({ params }: PageProps) {
   // Pre-process checklist items to give 'checklistDone' count
   const transformedBoard = {
     ...board,
-    lists: board.lists.map(list => ({
+    lists: board.lists.map((list) => ({
       ...list,
-      cards: list.cards.map(card => ({
+      cards: list.cards.map((card) => ({
         ...card,
-        checklistDone: card.checklistItems.length
-      }))
-    }))
+        checklistDone: card.checklistItems.length,
+      })),
+    })),
   };
 
   const bgStyle = {
-    background: GRADIENTS[board.backgroundColor] || GRADIENTS["ocean"],
-    color: board.backgroundColor === "snow" ? "var(--color-on-surface)" : "var(--color-on-primary)"
+    background: GRADIENTS[board.backgroundColor] || GRADIENTS.ocean,
+    color:
+      board.backgroundColor === "snow"
+        ? "var(--color-on-surface)"
+        : "var(--color-on-primary)",
   };
 
   return (
-    <div className="flex-1 flex flex-col relative w-full h-full" style={bgStyle}>
-      <KanbanBoard board={transformedBoard} />
+    <div
+      className="flex-1 flex flex-col relative w-full h-full"
+      style={bgStyle}
+    >
+      <BoardWorkspace board={transformedBoard} />
       <CardModal />
     </div>
   );
