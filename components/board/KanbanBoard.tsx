@@ -28,6 +28,7 @@ import {
   persistCardMove,
   persistCardsReorder,
 } from "@/components/board/kanban-board/api";
+import { useHorizontalDragScroll } from "@/components/board/hooks/useHorizontalDragScroll";
 import { EditableText } from "@/components/ui/EditableText";
 import {
   reorderListsAction,
@@ -49,6 +50,7 @@ export function KanbanBoard({
   const [newListTitle, setNewListTitle] = useState("");
   const [copySourceListId, setCopySourceListId] = useState<string | null>(null);
   const newListInputRef = useRef<HTMLInputElement>(null);
+  const boardCanvasRef = useHorizontalDragScroll<HTMLDivElement>();
 
   const handleAddList = async () => {
     if (!newListTitle.trim()) {
@@ -187,6 +189,7 @@ export function KanbanBoard({
 
       {/* Board Canvas */}
       <div
+        ref={boardCanvasRef}
         className="flex-1 min-h-0 w-full overflow-x-scroll overflow-y-hidden p-3 [scrollbar-gutter:stable]"
         style={{
           background:
@@ -222,7 +225,7 @@ export function KanbanBoard({
             </SortableContext>
 
             {/* Add New List Button */}
-            <div className="w-[272px] shrink-0">
+            <div data-pan-block="true" className="w-[272px] shrink-0">
               {isAddingList ? (
                 <div className="bg-surface-container-low rounded-lg p-2 shadow-sm flex flex-col gap-2">
                   <input

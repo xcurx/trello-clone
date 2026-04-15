@@ -96,7 +96,7 @@ function CardContent({ card }: { card: KanbanCardData }) {
     <>
       {card.coverColor ? (
         <div
-          className="mb-2 h-1.5 w-full rounded-full"
+          className="mb-3 h-12 w-full rounded-lg"
           style={{ backgroundColor: card.coverColor }}
         />
       ) : null}

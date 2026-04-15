@@ -395,6 +395,7 @@ function SortableListColumn({
   if (isDragging) {
     return (
       <div
+        data-pan-block="true"
         ref={setNodeRef}
         style={style}
         className="h-[180px] w-[272px] shrink-0 rounded-2xl border-2 border-dashed border-white/24 bg-black/18 opacity-50"
@@ -405,12 +406,13 @@ function SortableListColumn({
   return (
     <>
       <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        "relative flex max-h-full w-[272px] shrink-0 flex-col overflow-visible rounded-xl text-white shadow-[0_1px_1px_rgba(0,0,0,0.24),0_8px_16px_rgba(0,0,0,0.16)]",
-        tone.shell,
-      )}
+        data-pan-block="true"
+        ref={setNodeRef}
+        style={style}
+        className={cn(
+          "relative flex max-h-full w-[272px] shrink-0 flex-col overflow-visible rounded-xl text-white shadow-[0_1px_1px_rgba(0,0,0,0.24),0_8px_16px_rgba(0,0,0,0.16)]",
+          tone.shell,
+        )}
       >
       <div
         {...attributes}

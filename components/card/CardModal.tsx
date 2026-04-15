@@ -35,10 +35,12 @@ import {
   toDateTimeLocalValue,
 } from "@/components/card/card-modal/utils";
 import { ActivitySidebar } from "@/components/card/card-modal/ActivitySidebar";
+import { CoverPopoverContent } from "@/components/card/card-modal/CoverPopoverContent";
 import { Avatar } from "@/components/ui/Avatar";
 import { Dialog } from "@/components/ui/Dialog";
 import { EditableText } from "@/components/ui/EditableText";
 import { Popover } from "@/components/ui/Popover";
+import { cn } from "@/lib/utils";
 import type { CardDetail, LabelData, MemberData } from "@/types";
 import type { CardModalState } from "@/types/card-modal";
 
@@ -59,6 +61,7 @@ export function CardModal() {
   const [newComment, setNewComment] = useState("");
   const [dueDateValue, setDueDateValue] = useState("");
   const [isClosing, setIsClosing] = useState(false);
+  const [isActivityVisible, setIsActivityVisible] = useState(true);
 
   useEffect(() => {
     if (!cardId) {
@@ -69,6 +72,7 @@ export function CardModal() {
       setNewChecklistTitle("");
       setNewComment("");
       setDueDateValue("");
+      setIsActivityVisible(true);
       return;
     }
 
@@ -99,6 +103,7 @@ export function CardModal() {
   useEffect(() => {
     if (cardId) {
       setIsClosing(false);
+      setIsActivityVisible(true);
     }
   }, [cardId]);
 
@@ -291,6 +296,16 @@ export function CardModal() {
     await saveCardPatch({ dueDate: nextDueDate });
   };
 
+  const handleSetCoverColor = async (color: string) => {
+    if (!card || card.coverColor === color) return;
+    await saveCardPatch({ coverColor: color });
+  };
+
+  const handleRemoveCoverColor = async () => {
+    if (!card || !card.coverColor) return;
+    await saveCardPatch({ coverColor: null });
+  };
+
   const handleAddComment = async () => {
     if (!card || !newComment.trim()) return;
 
@@ -323,7 +338,7 @@ export function CardModal() {
     <Dialog
       isOpen={!!cardId}
       onClose={handleClose}
-      className="max-w-[1080px] bg-[#252a33] p-0 text-white"
+      className="max-w-[1080px] overflow-hidden bg-[#252a33] p-0 text-white"
     >
       {loading ? (
         <div className="p-10 text-center text-white/62">
@@ -334,7 +349,7 @@ export function CardModal() {
           <div className="overflow-hidden">
             {card.coverColor ? (
               <div
-                className="h-2 w-full"
+                className="h-24 w-full sm:h-28"
                 style={{ backgroundColor: card.coverColor }}
               />
             ) : null}
@@ -349,13 +364,31 @@ export function CardModal() {
               </button>
 
               <div className="flex items-center gap-1 pr-9">
-                <button
-                  type="button"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
-                  aria-label="Card cover"
+                <Popover
+                  trigger={
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+                      aria-label="Card cover"
+                    >
+                      <ImageIcon className="h-4 w-4" />
+                    </button>
+                  }
+                  title="Cover"
+                  side="bottom"
+                  align="end"
+                  contentClassName="w-[300px] border-white/10 bg-[#2b2e38] text-white"
                 >
-                  <ImageIcon className="h-4 w-4" />
-                </button>
+                  <CoverPopoverContent
+                    selectedColor={card.coverColor}
+                    onSelectColor={(color) => {
+                      handleSetCoverColor(color).catch(console.error);
+                    }}
+                    onRemoveColor={() => {
+                      handleRemoveCoverColor().catch(console.error);
+                    }}
+                  />
+                </Popover>
                 <button
                   type="button"
                   className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
@@ -399,7 +432,12 @@ export function CardModal() {
               </div>
             ) : null}
 
-            <div className="grid min-h-[520px] grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
+            <div
+              className={cn(
+                "grid min-h-[520px] grid-cols-1",
+                isActivityVisible && "lg:grid-cols-[minmax(0,1fr)_460px]",
+              )}
+            >
               <div className="space-y-7 px-6 pb-6 pt-5">
                 <div className="flex items-start gap-3">
                   <CheckCircle2 className="mt-1 h-6 w-6 shrink-0 text-[#8bc34a]" />
@@ -756,14 +794,16 @@ export function CardModal() {
                 ) : null}
               </div>
 
-              <ActivitySidebar
-                card={card}
-                newComment={newComment}
-                onNewCommentChange={setNewComment}
-                onAddComment={() => {
-                  handleAddComment().catch(console.error);
-                }}
-              />
+              {isActivityVisible ? (
+                <ActivitySidebar
+                  card={card}
+                  newComment={newComment}
+                  onNewCommentChange={setNewComment}
+                  onAddComment={() => {
+                    handleAddComment().catch(console.error);
+                  }}
+                />
+              ) : null}
             </div>
 
             <div className="h-px w-full bg-white/10" />
@@ -773,7 +813,14 @@ export function CardModal() {
             <div className="pointer-events-auto inline-flex items-center overflow-hidden rounded-2xl border border-white/12 bg-[#1d2127] p-1 text-sm font-medium text-white/72 shadow-[0_10px_26px_rgba(0,0,0,0.35)]">
               <button
                 type="button"
-                className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#0c66e4]/20 px-4 text-[#87b6ff]"
+                onClick={() => setIsActivityVisible((current) => !current)}
+                aria-pressed={isActivityVisible}
+                className={cn(
+                  "inline-flex h-9 items-center gap-2 rounded-xl px-4 transition-colors",
+                  isActivityVisible
+                    ? "bg-[#0c66e4]/20 text-[#87b6ff]"
+                    : "text-white/72 hover:bg-white/8 hover:text-white",
+                )}
               >
                 <MessageSquare className="h-4 w-4" />
                 Comments

@@ -48,6 +48,7 @@ import {
   getFilteredTrackWidth,
 } from "@/components/board/workspace/filtering";
 import { resolveListTone } from "@/components/board/list-column/constants";
+import { useHorizontalDragScroll } from "@/components/board/hooks/useHorizontalDragScroll";
 import { Avatar } from "@/components/ui/Avatar";
 import { EditableText } from "@/components/ui/EditableText";
 import { Popover } from "@/components/ui/Popover";
@@ -294,6 +295,10 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     selectedLabelIds.length > 0 ||
     selectedMemberIds.length > 0 ||
     dueDateFilter !== "all";
+
+  const filteredBoardScrollRef = useHorizontalDragScroll<HTMLDivElement>(
+    hasActiveFilters,
+  );
 
   const activeFilterCount = getActiveFilterCount(
     query,
@@ -1055,7 +1060,10 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
 
           <div className="flex-1 min-h-0 overflow-hidden">
             {hasActiveFilters ? (
-              <div className="h-full overflow-x-scroll overflow-y-auto px-3 py-3 [scrollbar-gutter:stable]">
+              <div
+                ref={filteredBoardScrollRef}
+                className="h-full overflow-x-scroll overflow-y-auto px-3 py-3 [scrollbar-gutter:stable]"
+              >
                 {totalMatches > 0 ? (
                   <div
                     className="flex min-h-full min-w-full items-start gap-3 pb-2"
@@ -1067,6 +1075,7 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                       return (
                         <div
                           key={list.id}
+                          data-pan-block="true"
                           className={cn(
                             "w-[272px] shrink-0 rounded-2xl border border-white/8 p-2 text-white shadow-[0_12px_30px_rgba(0,0,0,0.24)]",
                             tone.shell,
@@ -1094,6 +1103,13 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                                   onClick={() => openCard(card.id)}
                                   className="w-full rounded-xl border border-white/6 bg-[#24282d] p-3 text-left text-white transition-colors hover:bg-[#2a2f35]"
                                 >
+                                  {card.coverColor ? (
+                                    <div
+                                      className="mb-3 h-10 w-full rounded-lg"
+                                      style={{ backgroundColor: card.coverColor }}
+                                    />
+                                  ) : null}
+
                                   {card.labels.length > 0 ? (
                                     <div className="mb-2 flex flex-wrap gap-1">
                                       {card.labels.map(({ id, label }) => (
