@@ -6,24 +6,63 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { Check, ChevronUp, MoreHorizontal, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Dialog } from "@/components/ui/Dialog";
 import { EditableText } from "@/components/ui/EditableText";
+import { Popover } from "@/components/ui/Popover";
 import { cn } from "@/lib/utils";
 import { KanbanCard, type KanbanCardData } from "../card/KanbanCard";
+
+type MoveBoardSummary = {
+  id: string;
+  title: string;
+};
+
+type MoveListSummary = {
+  id: string;
+  boardId: string;
+  title: string;
+  position: number;
+  cardsCount: number;
+};
+
+type ListColorKey =
+  | "green"
+  | "yellow"
+  | "orange"
+  | "red"
+  | "purple"
+  | "blue"
+  | "teal"
+  | "lime"
+  | "pink"
+  | "gray";
+
+type ListTone = {
+  shell: string;
+  header: string;
+};
 
 interface ListColumnProps {
   list: {
     id: string;
+    boardId: string;
     title: string;
     position: number;
+    color?: string | null;
     cards: KanbanCardData[];
   };
+  onRequestCopyList?: (listId: string, title: string) => void;
+  onListPatched?: (
+    listId: string,
+    patch: { title?: string; color?: string | null },
+  ) => void;
   isOverlay?: boolean;
 }
 
-const LIST_TONES = [
+const DEFAULT_LIST_TONES: ListTone[] = [
   {
     shell: "bg-[#4f3a72]/84 border-white/8",
     header: "bg-[#5f4786]/72 text-white",
@@ -42,26 +81,389 @@ const LIST_TONES = [
   },
 ];
 
-export function ListColumn({ list, isOverlay = false }: ListColumnProps) {
+const LIST_COLOR_TONES: Record<ListColorKey, ListTone> = {
+  green: {
+    shell: "bg-[#1d5a4c]/84 border-white/8",
+    header: "bg-[#256d5c]/72 text-[#b8f2df]",
+  },
+  yellow: {
+    shell: "bg-[#59470f]/84 border-white/8",
+    header: "bg-[#6d5714]/74 text-[#ffec8b]",
+  },
+  orange: {
+    shell: "bg-[#5c3508]/84 border-white/8",
+    header: "bg-[#733f05]/72 text-[#ffd8ad]",
+  },
+  red: {
+    shell: "bg-[#5a1e1b]/84 border-white/8",
+    header: "bg-[#712824]/72 text-[#ffcbc5]",
+  },
+  purple: {
+    shell: "bg-[#4f3a72]/84 border-white/8",
+    header: "bg-[#5f4786]/72 text-white",
+  },
+  blue: {
+    shell: "bg-[#1b3f72]/84 border-white/8",
+    header: "bg-[#214f8f]/72 text-[#c5dbff]",
+  },
+  teal: {
+    shell: "bg-[#19506a]/84 border-white/8",
+    header: "bg-[#21708f]/72 text-[#c5ecff]",
+  },
+  lime: {
+    shell: "bg-[#37591a]/84 border-white/8",
+    header: "bg-[#4b751f]/72 text-[#e5ffbd]",
+  },
+  pink: {
+    shell: "bg-[#5a2852]/84 border-white/8",
+    header: "bg-[#74306a]/72 text-[#ffd1f8]",
+  },
+  gray: {
+    shell: "bg-[#2f333a]/84 border-white/8",
+    header: "bg-[#3a4048]/72 text-[#f0f3f6]",
+  },
+};
+
+const LIST_COLOR_OPTIONS: Array<{ key: ListColorKey; swatchClass: string }> = [
+  { key: "green", swatchClass: "bg-[#1d8c6f]" },
+  { key: "yellow", swatchClass: "bg-[#8b6f05]" },
+  { key: "orange", swatchClass: "bg-[#b35f00]" },
+  { key: "red", swatchClass: "bg-[#bf3b2f]" },
+  { key: "purple", swatchClass: "bg-[#7d43a1]" },
+  { key: "blue", swatchClass: "bg-[#2563d4]" },
+  { key: "teal", swatchClass: "bg-[#2c86a4]" },
+  { key: "lime", swatchClass: "bg-[#5b8a2a]" },
+  { key: "pink", swatchClass: "bg-[#a44f88]" },
+  { key: "gray", swatchClass: "bg-[#7c8088]" },
+];
+
+const resolveListTone = (color: string | null | undefined, position: number) => {
+  if (color && color in LIST_COLOR_TONES) {
+    return LIST_COLOR_TONES[color as ListColorKey];
+  }
+
+  return DEFAULT_LIST_TONES[position % DEFAULT_LIST_TONES.length];
+};
+
+export function ListColumn({
+  list,
+  onRequestCopyList,
+  onListPatched,
+  isOverlay = false,
+}: ListColumnProps) {
   if (isOverlay) {
     return <ListColumnOverlay list={list} />;
   }
 
-  return <SortableListColumn list={list} />;
+  return (
+    <SortableListColumn
+      list={list}
+      onRequestCopyList={onRequestCopyList}
+      onListPatched={onListPatched}
+    />
+  );
 }
 
-function SortableListColumn({ list }: { list: ListColumnProps["list"] }) {
+function SortableListColumn({
+  list,
+  onRequestCopyList,
+  onListPatched,
+}: {
+  list: ListColumnProps["list"];
+  onRequestCopyList?: ListColumnProps["onRequestCopyList"];
+  onListPatched?: ListColumnProps["onListPatched"];
+}) {
   const cardsIds = useMemo(
     () => list.cards.map((card) => card.id),
     [list.cards],
   );
-  const tone = LIST_TONES[list.position % LIST_TONES.length];
 
   const [isAddingCard, setIsAddingCard] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState("");
+  const [isColorSectionOpen, setIsColorSectionOpen] = useState(true);
+  const [listColor, setListColor] = useState<string | null>(list.color ?? null);
+  const [listActionsMenuVersion, setListActionsMenuVersion] = useState(0);
+  const [isMoveListOpen, setIsMoveListOpen] = useState(false);
+  const [isMoveAllCardsOpen, setIsMoveAllCardsOpen] = useState(false);
+  const [boardOptions, setBoardOptions] = useState<MoveBoardSummary[]>([]);
+  const [moveListBoardLists, setMoveListBoardLists] = useState<MoveListSummary[]>(
+    [],
+  );
+  const [moveCardsBoardLists, setMoveCardsBoardLists] = useState<
+    MoveListSummary[]
+  >([]);
+  const [selectedMoveBoardId, setSelectedMoveBoardId] = useState(list.boardId);
+  const [selectedMovePosition, setSelectedMovePosition] = useState(
+    list.position + 1,
+  );
+  const [selectedCardsBoardId, setSelectedCardsBoardId] = useState(list.boardId);
+  const [selectedTargetListId, setSelectedTargetListId] = useState("");
+  const [selectedCardsPosition, setSelectedCardsPosition] = useState(1);
+  const [isLoadingBoardOptions, setIsLoadingBoardOptions] = useState(false);
+  const [isLoadingMoveListLists, setIsLoadingMoveListLists] = useState(false);
+  const [isLoadingMoveCardsLists, setIsLoadingMoveCardsLists] = useState(false);
+  const [isMovingList, setIsMovingList] = useState(false);
+  const [isMovingCards, setIsMovingCards] = useState(false);
+  const [moveListError, setMoveListError] = useState<string | null>(null);
+  const [moveCardsError, setMoveCardsError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const router = useRouter();
+  const tone = resolveListTone(listColor, list.position);
+
+  const moveListPositionCount = useMemo(() => {
+    const insertionBaseCount =
+      selectedMoveBoardId === list.boardId
+        ? Math.max(0, moveListBoardLists.length - 1)
+        : moveListBoardLists.length;
+
+    return Math.max(1, insertionBaseCount + 1);
+  }, [list.boardId, moveListBoardLists.length, selectedMoveBoardId]);
+
+  const moveCardsListOptions = useMemo(
+    () => moveCardsBoardLists.filter((entry) => entry.id !== list.id),
+    [list.id, moveCardsBoardLists],
+  );
+
+  const selectedTargetList = useMemo(
+    () =>
+      moveCardsListOptions.find((entry) => entry.id === selectedTargetListId) ??
+      null,
+    [moveCardsListOptions, selectedTargetListId],
+  );
+
+  const moveCardsPositionCount = useMemo(
+    () => Math.max(1, (selectedTargetList?.cardsCount ?? 0) + 1),
+    [selectedTargetList?.cardsCount],
+  );
+
+  const boardSelectOptions =
+    boardOptions.length > 0
+      ? boardOptions
+      : [{ id: list.boardId, title: "Current board" }];
+
+  const canMoveAllCards =
+    selectedTargetListId.length > 0 && !isLoadingMoveCardsLists && !isMovingCards;
+
+  const getMessage = (error: unknown, fallback: string) =>
+    error instanceof Error ? error.message : fallback;
+
+  const loadBoardOptions = async () => {
+    setIsLoadingBoardOptions(true);
+
+    try {
+      const response = await fetch("/api/boards", {
+        cache: "no-store",
+      });
+
+      const payload = (await response.json()) as {
+        success?: boolean;
+        data?: Array<{ id: string; title: string }>;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.success || !Array.isArray(payload.data)) {
+        throw new Error(payload.error ?? "Failed to load boards");
+      }
+
+      setBoardOptions(payload.data);
+      return payload.data;
+    } finally {
+      setIsLoadingBoardOptions(false);
+    }
+  };
+
+  const loadListsForBoard = async (boardId: string) => {
+    const response = await fetch(`/api/boards/${boardId}/lists`, {
+      cache: "no-store",
+    });
+
+    const payload = (await response.json()) as {
+      success?: boolean;
+      data?: MoveListSummary[];
+      error?: string;
+    };
+
+    if (!response.ok || !payload.success || !Array.isArray(payload.data)) {
+      throw new Error(payload.error ?? "Failed to load lists");
+    }
+
+    return payload.data;
+  };
+
+  const openMoveListDialog = async () => {
+    setListActionsMenuVersion((value) => value + 1);
+    setMoveListError(null);
+    setIsMoveListOpen(true);
+    setSelectedMoveBoardId(list.boardId);
+    setSelectedMovePosition(list.position + 1);
+
+    try {
+      await loadBoardOptions();
+      setIsLoadingMoveListLists(true);
+      const lists = await loadListsForBoard(list.boardId);
+      setMoveListBoardLists(lists);
+    } catch (error) {
+      setMoveListError(getMessage(error, "Failed to load move options"));
+    } finally {
+      setIsLoadingMoveListLists(false);
+    }
+  };
+
+  const openMoveAllCardsDialog = async () => {
+    setListActionsMenuVersion((value) => value + 1);
+    setMoveCardsError(null);
+    setIsMoveAllCardsOpen(true);
+    setSelectedCardsBoardId(list.boardId);
+    setSelectedCardsPosition(1);
+
+    try {
+      await loadBoardOptions();
+      setIsLoadingMoveCardsLists(true);
+      const lists = await loadListsForBoard(list.boardId);
+      setMoveCardsBoardLists(lists);
+
+      const firstTarget = lists.find((entry) => entry.id !== list.id);
+      setSelectedTargetListId(firstTarget?.id ?? "");
+    } catch (error) {
+      setMoveCardsError(getMessage(error, "Failed to load move options"));
+    } finally {
+      setIsLoadingMoveCardsLists(false);
+    }
+  };
+
+  const handleMoveListBoardChange = async (nextBoardId: string) => {
+    setSelectedMoveBoardId(nextBoardId);
+    setMoveListError(null);
+    setIsLoadingMoveListLists(true);
+
+    try {
+      const lists = await loadListsForBoard(nextBoardId);
+      setMoveListBoardLists(lists);
+
+      const insertionBaseCount =
+        nextBoardId === list.boardId
+          ? Math.max(0, lists.length - 1)
+          : lists.length;
+
+      const positionCount = Math.max(1, insertionBaseCount + 1);
+
+      setSelectedMovePosition(
+        nextBoardId === list.boardId
+          ? Math.min(list.position + 1, positionCount)
+          : positionCount,
+      );
+    } catch (error) {
+      setMoveListError(getMessage(error, "Failed to load lists"));
+    } finally {
+      setIsLoadingMoveListLists(false);
+    }
+  };
+
+  const handleMoveCardsBoardChange = async (nextBoardId: string) => {
+    setSelectedCardsBoardId(nextBoardId);
+    setMoveCardsError(null);
+    setIsLoadingMoveCardsLists(true);
+
+    try {
+      const lists = await loadListsForBoard(nextBoardId);
+      setMoveCardsBoardLists(lists);
+
+      const firstTarget = lists.find((entry) => entry.id !== list.id);
+      setSelectedTargetListId(firstTarget?.id ?? "");
+      setSelectedCardsPosition(1);
+    } catch (error) {
+      setMoveCardsError(getMessage(error, "Failed to load lists"));
+    } finally {
+      setIsLoadingMoveCardsLists(false);
+    }
+  };
+
+  const handleMoveList = async () => {
+    setMoveListError(null);
+    setIsMovingList(true);
+
+    try {
+      const response = await fetch(`/api/lists/${list.id}/move`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetBoardId: selectedMoveBoardId,
+          position: selectedMovePosition - 1,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? "Failed to move list");
+      }
+
+      setIsMoveListOpen(false);
+      router.refresh();
+    } catch (error) {
+      setMoveListError(getMessage(error, "Failed to move list"));
+    } finally {
+      setIsMovingList(false);
+    }
+  };
+
+  const handleMoveAllCards = async () => {
+    if (!selectedTargetListId) {
+      setMoveCardsError("Select a target list");
+      return;
+    }
+
+    setMoveCardsError(null);
+    setIsMovingCards(true);
+
+    try {
+      const response = await fetch(`/api/lists/${list.id}/move-cards`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetBoardId: selectedCardsBoardId,
+          targetListId: selectedTargetListId,
+          position: selectedCardsPosition - 1,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? "Failed to move cards");
+      }
+
+      setIsMoveAllCardsOpen(false);
+      router.refresh();
+    } catch (error) {
+      setMoveCardsError(getMessage(error, "Failed to move cards"));
+    } finally {
+      setIsMovingCards(false);
+    }
+  };
+
+  useEffect(() => {
+    setListColor(list.color ?? null);
+  }, [list.color]);
+
+  useEffect(() => {
+    setSelectedMovePosition((value) =>
+      Math.min(Math.max(1, value), moveListPositionCount),
+    );
+  }, [moveListPositionCount]);
+
+  useEffect(() => {
+    setSelectedCardsPosition((value) =>
+      Math.min(Math.max(1, value), moveCardsPositionCount),
+    );
+  }, [moveCardsPositionCount]);
 
   const handleAddCard = async () => {
     if (!newCardTitle.trim()) {
@@ -92,6 +494,30 @@ function SortableListColumn({ list }: { list: ListColumnProps["list"] }) {
 
     setNewCardTitle("");
     setIsAddingCard(false);
+  };
+
+  const openAddCardComposer = () => {
+    setIsAddingCard(true);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+
+  const patchListColor = async (color: string | null) => {
+    const previousColor = listColor;
+    setListColor(color);
+    onListPatched?.(list.id, { color });
+
+    try {
+      await fetch(`/api/lists/${list.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ color }),
+      });
+      list.color = color;
+    } catch (error) {
+      console.error(error);
+      setListColor(previousColor);
+      onListPatched?.(list.id, { color: previousColor });
+    }
   };
 
   const {
@@ -125,14 +551,15 @@ function SortableListColumn({ list }: { list: ListColumnProps["list"] }) {
   }
 
   return (
-    <div
+    <>
+      <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex max-h-full w-[272px] shrink-0 flex-col overflow-hidden rounded-2xl border text-white shadow-[0_14px_34px_rgba(0,0,0,0.24)] backdrop-blur-sm",
+        "relative flex max-h-full w-[272px] shrink-0 flex-col overflow-visible rounded-2xl border text-white shadow-[0_14px_34px_rgba(0,0,0,0.24)] backdrop-blur-sm",
         tone.shell,
       )}
-    >
+      >
       <div
         {...attributes}
         {...listeners}
@@ -146,9 +573,11 @@ function SortableListColumn({ list }: { list: ListColumnProps["list"] }) {
           onChange={(newValue) => {
             fetch(`/api/lists/${list.id}`, {
               method: "PATCH",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ title: newValue }),
             }).catch(console.error);
             list.title = newValue;
+            onListPatched?.(list.id, { title: newValue });
           }}
           as="h3"
           textClassName="text-base font-semibold cursor-text"
@@ -156,12 +585,139 @@ function SortableListColumn({ list }: { list: ListColumnProps["list"] }) {
           className="min-w-0 flex-1 rounded-md bg-transparent px-0 hover:bg-white/6"
         />
 
-        <button
-          type="button"
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+        <Popover
+          key={listActionsMenuVersion}
+          trigger={
+            <button
+              type="button"
+              onPointerDown={(event) => event.stopPropagation()}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          }
+          title="List actions"
+          side="bottom"
+          align="end"
+          contentClassName="w-[248px] bg-[#2b2e38] text-white border-white/10"
         >
-          <MoreHorizontal className="h-4 w-4" />
-        </button>
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={openAddCardComposer}
+              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-white/86 transition-colors hover:bg-white/8"
+            >
+              Add card
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onRequestCopyList?.(list.id, list.title)}
+              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-white/86 transition-colors hover:bg-white/8"
+            >
+              Copy list
+            </button>
+
+            <button
+              type="button"
+              onClick={openMoveListDialog}
+              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-white/86 transition-colors hover:bg-white/8"
+            >
+              Move list
+            </button>
+
+            {list.cards.length > 0 ? (
+              <button
+                type="button"
+                onClick={openMoveAllCardsDialog}
+                className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-white/86 transition-colors hover:bg-white/8"
+              >
+                Move all cards in this list
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              disabled
+              className="block w-full cursor-not-allowed rounded-md px-2 py-1.5 text-left text-sm text-white/50"
+            >
+              Watch
+            </button>
+
+            <div className="my-2 h-px w-full bg-white/10" />
+
+            <button
+              type="button"
+              onClick={() => setIsColorSectionOpen((current) => !current)}
+              className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-white/86">
+                  Change list color
+                </span>
+                <span className="rounded-sm bg-[#4f3a72] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[#d7c8ff]">
+                  Premium
+                </span>
+              </div>
+
+              <ChevronUp
+                className={cn(
+                  "h-4 w-4 text-white/58 transition-transform",
+                  !isColorSectionOpen && "rotate-180",
+                )}
+              />
+            </button>
+
+            {isColorSectionOpen ? (
+              <div className="space-y-2 px-2 pb-1 pt-1">
+                <div className="grid grid-cols-5 gap-2">
+                  {LIST_COLOR_OPTIONS.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => patchListColor(option.key)}
+                      className={cn(
+                        "relative h-8 rounded-sm transition-transform hover:scale-[1.03]",
+                        option.swatchClass,
+                      )}
+                      aria-label={`Set list color to ${option.key}`}
+                    >
+                      {listColor === option.key ? (
+                        <Check className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 text-black/80" />
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => patchListColor(null)}
+                  className="flex h-8 w-full items-center justify-center gap-2 rounded-sm bg-white/8 text-sm font-medium text-white/82 transition-colors hover:bg-white/12"
+                >
+                  <X className="h-4 w-4" />
+                  Remove color
+                </button>
+              </div>
+            ) : null}
+
+            <div className="my-2 h-px w-full bg-white/10" />
+
+            <button
+              type="button"
+              disabled
+              className="block w-full cursor-not-allowed rounded-md px-2 py-1.5 text-left text-sm text-white/50"
+            >
+              Archive this list
+            </button>
+            <button
+              type="button"
+              disabled
+              className="block w-full cursor-not-allowed rounded-md px-2 py-1.5 text-left text-sm text-white/50"
+            >
+              Archive all cards in this list
+            </button>
+          </div>
+        </Popover>
       </div>
 
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2 pt-2">
@@ -219,10 +775,7 @@ function SortableListColumn({ list }: { list: ListColumnProps["list"] }) {
         ) : (
           <button
             type="button"
-            onClick={() => {
-              setIsAddingCard(true);
-              requestAnimationFrame(() => textareaRef.current?.focus());
-            }}
+            onClick={openAddCardComposer}
             className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-white/72 transition-colors hover:bg-black/14 hover:text-white"
           >
             <Plus className="h-4 w-4" />
@@ -230,12 +783,205 @@ function SortableListColumn({ list }: { list: ListColumnProps["list"] }) {
           </button>
         )}
       </div>
-    </div>
+      </div>
+
+      <Dialog
+        isOpen={isMoveListOpen}
+        onClose={() => {
+          if (!isMovingList) {
+            setIsMoveListOpen(false);
+          }
+        }}
+        className="max-w-[360px] border border-white/10 bg-[#2b2e38] text-white"
+      >
+        <div className="px-5 pb-5 pt-4">
+          <h3 className="text-center text-base font-semibold text-white/90">
+            Move list
+          </h3>
+
+          <div className="mt-4 space-y-3">
+            <label className="block">
+              <span className="mb-1.5 block text-sm text-white/72">Board</span>
+              <select
+                value={selectedMoveBoardId}
+                onChange={(event) => {
+                  void handleMoveListBoardChange(event.target.value);
+                }}
+                disabled={isLoadingBoardOptions || isMovingList}
+                className="h-10 w-full rounded-md border border-white/20 bg-[#2b2e38] px-3 text-sm text-white outline-none focus:border-[#8fb8ff]"
+              >
+                {boardSelectOptions.map((boardOption) => (
+                  <option
+                    key={boardOption.id}
+                    value={boardOption.id}
+                    className="bg-[#2b2e38]"
+                  >
+                    {boardOption.title}
+                    {boardOption.id === list.boardId ? " (current)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-sm text-white/72">
+                Position
+              </span>
+              <select
+                value={selectedMovePosition}
+                onChange={(event) => {
+                  setSelectedMovePosition(Number(event.target.value));
+                }}
+                disabled={isLoadingMoveListLists || isMovingList}
+                className="h-10 w-full rounded-md border border-white/20 bg-[#2b2e38] px-3 text-sm text-white outline-none focus:border-[#8fb8ff]"
+              >
+                {Array.from({ length: moveListPositionCount }, (_, index) =>
+                  index + 1,
+                ).map((position) => (
+                  <option
+                    key={position}
+                    value={position}
+                    className="bg-[#2b2e38]"
+                  >
+                    {position}
+                    {selectedMoveBoardId === list.boardId &&
+                    position === list.position + 1
+                      ? " (current)"
+                      : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {moveListError ? (
+            <p className="mt-3 text-xs text-[#ffb4b4]">{moveListError}</p>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={handleMoveList}
+            disabled={isMovingList || isLoadingMoveListLists}
+            className="mt-4 inline-flex h-9 min-w-[88px] items-center justify-center rounded-md bg-[#579dff] px-4 text-sm font-medium text-[#082145] transition-colors hover:bg-[#85b8ff] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {isMovingList ? "Moving..." : "Move"}
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        isOpen={isMoveAllCardsOpen}
+        onClose={() => {
+          if (!isMovingCards) {
+            setIsMoveAllCardsOpen(false);
+          }
+        }}
+        className="max-w-[360px] border border-white/10 bg-[#2b2e38] text-white"
+      >
+        <div className="px-5 pb-5 pt-4">
+          <h3 className="text-center text-base font-semibold text-white/90">
+            Move all cards in list
+          </h3>
+
+          <div className="mt-4 space-y-3">
+            <label className="block">
+              <span className="mb-1.5 block text-sm text-white/72">Board</span>
+              <select
+                value={selectedCardsBoardId}
+                onChange={(event) => {
+                  void handleMoveCardsBoardChange(event.target.value);
+                }}
+                disabled={isLoadingBoardOptions || isMovingCards}
+                className="h-10 w-full rounded-md border border-white/20 bg-[#2b2e38] px-3 text-sm text-white outline-none focus:border-[#8fb8ff]"
+              >
+                {boardSelectOptions.map((boardOption) => (
+                  <option
+                    key={boardOption.id}
+                    value={boardOption.id}
+                    className="bg-[#2b2e38]"
+                  >
+                    {boardOption.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-sm text-white/72">List</span>
+              <select
+                value={selectedTargetListId}
+                onChange={(event) => {
+                  setSelectedTargetListId(event.target.value);
+                  setSelectedCardsPosition(1);
+                }}
+                disabled={isLoadingMoveCardsLists || isMovingCards}
+                className="h-10 w-full rounded-md border border-white/20 bg-[#2b2e38] px-3 text-sm text-white outline-none focus:border-[#8fb8ff]"
+              >
+                {moveCardsListOptions.length === 0 ? (
+                  <option value="" className="bg-[#2b2e38]">
+                    No destination list
+                  </option>
+                ) : (
+                  moveCardsListOptions.map((targetList) => (
+                    <option
+                      key={targetList.id}
+                      value={targetList.id}
+                      className="bg-[#2b2e38]"
+                    >
+                      {targetList.title}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-sm text-white/72">
+                Position
+              </span>
+              <select
+                value={selectedCardsPosition}
+                onChange={(event) => {
+                  setSelectedCardsPosition(Number(event.target.value));
+                }}
+                disabled={!selectedTargetListId || isMovingCards}
+                className="h-10 w-full rounded-md border border-white/20 bg-[#2b2e38] px-3 text-sm text-white outline-none focus:border-[#8fb8ff]"
+              >
+                {Array.from({ length: moveCardsPositionCount }, (_, index) =>
+                  index + 1,
+                ).map((position) => (
+                  <option
+                    key={position}
+                    value={position}
+                    className="bg-[#2b2e38]"
+                  >
+                    {position}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {moveCardsError ? (
+            <p className="mt-3 text-xs text-[#ffb4b4]">{moveCardsError}</p>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={handleMoveAllCards}
+            disabled={!canMoveAllCards}
+            className="mt-4 inline-flex h-9 min-w-[88px] items-center justify-center rounded-md bg-[#579dff] px-4 text-sm font-medium text-[#082145] transition-colors hover:bg-[#85b8ff] disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {isMovingCards ? "Moving..." : "Move"}
+          </button>
+        </div>
+      </Dialog>
+    </>
   );
 }
 
 function ListColumnOverlay({ list }: { list: ListColumnProps["list"] }) {
-  const tone = LIST_TONES[list.position % LIST_TONES.length];
+  const tone = resolveListTone(list.color, list.position);
 
   return (
     <div

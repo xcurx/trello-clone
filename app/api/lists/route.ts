@@ -14,8 +14,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { boardId, title } = parsed.data;
-    const list = await listService.create(boardId, { title });
+    const { boardId, title, color } = parsed.data;
+    const list = await listService.create(boardId, { title, color });
     
     // Add default empty cards array to map frontend shape gracefully
     return success({ ...list, cards: [] });

@@ -1,9 +1,24 @@
 import type { NextRequest } from "next/server";
 import { listService } from "@/lib/services/list.service";
 import { createListSchema } from "@/lib/validations/list.schema";
-import { created, serverError, validationError } from "@/lib/api-response";
+import {
+  created,
+  serverError,
+  success,
+  validationError,
+} from "@/lib/api-response";
 
 type Params = { params: Promise<{ boardId: string }> };
+
+export async function GET(_request: NextRequest, { params }: Params) {
+  try {
+    const { boardId } = await params;
+    const lists = await listService.getByBoard(boardId);
+    return success(lists);
+  } catch (err) {
+    return serverError(err);
+  }
+}
 
 export async function POST(request: NextRequest, { params }: Params) {
   try {

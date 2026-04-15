@@ -66,6 +66,7 @@ type BoardList = {
   id: string;
   boardId: string;
   title: string;
+  color?: string | null;
   position: number;
   cards: BoardCard[];
 };
@@ -93,36 +94,78 @@ export function KanbanBoard({
 
   const [isAddingList, setIsAddingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState("");
+  const [copySourceListId, setCopySourceListId] = useState<string | null>(null);
   const newListInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddList = async () => {
     if (!newListTitle.trim()) {
       setIsAddingList(false);
+      setCopySourceListId(null);
       return;
     }
+
     const title = newListTitle.trim();
+
     try {
-      const res = await fetch("/api/lists", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          boardId: board.id,
-          position: board.lists.length * 1024,
-        }),
-      });
+      const res = copySourceListId
+        ? await fetch(`/api/lists/${copySourceListId}/copy`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title }),
+          })
+        : await fetch("/api/lists", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title,
+              boardId: board.id,
+              position: board.lists.length * 1024,
+            }),
+          });
+
       const data = await res.json();
+
       if (data.success) {
-        setBoard({
-          ...board,
-          lists: [...board.lists, { ...data.data, cards: [] }],
-        });
+        const nextList = {
+          ...data.data,
+          cards: (data.data.cards ?? []).map(
+            (card: BoardCard & { checklistItems?: Array<{ id: string }> }) => ({
+              ...card,
+              checklistDone: card.checklistDone ?? card.checklistItems?.length,
+            }),
+          ),
+        } as BoardList;
+
+        setBoard((current) => ({
+          ...current,
+          lists: [...current.lists, nextList],
+        }));
       }
     } catch (e) {
       console.error(e);
     }
+
     setNewListTitle("");
     setIsAddingList(false);
+    setCopySourceListId(null);
+  };
+
+  const requestCopyList = (listId: string, title: string) => {
+    setCopySourceListId(listId);
+    setNewListTitle(title);
+    setIsAddingList(true);
+  };
+
+  const patchListInBoard = (
+    listId: string,
+    patch: { title?: string; color?: string | null },
+  ) => {
+    setBoard((current) => ({
+      ...current,
+      lists: current.lists.map((list) =>
+        list.id === listId ? { ...list, ...patch } : list,
+      ),
+    }));
   };
 
   const listsId = useMemo(
@@ -137,9 +180,9 @@ export function KanbanBoard({
   }, []);
 
   useEffect(() => {
-    setBoard((current) =>
-      current.id === initialBoard.id ? current : initialBoard,
-    );
+    // Keep local board state in sync with fresh server data from router.refresh().
+    boardRef.current = initialBoard;
+    setBoard(initialBoard);
   }, [initialBoard]);
 
   useEffect(() => {
@@ -269,7 +312,12 @@ export function KanbanBoard({
               strategy={horizontalListSortingStrategy}
             >
               {board.lists.map((list) => (
-                <ListColumn key={list.id} list={list} />
+                <ListColumn
+                  key={list.id}
+                  list={list}
+                  onRequestCopyList={requestCopyList}
+                  onListPatched={patchListInBoard}
+                />
               ))}
             </SortableContext>
 
@@ -288,6 +336,7 @@ export function KanbanBoard({
                       if (e.key === "Escape") {
                         setIsAddingList(false);
                         setNewListTitle("");
+                        setCopySourceListId(null);
                       }
                     }}
                   />
@@ -304,6 +353,7 @@ export function KanbanBoard({
                       onClick={() => {
                         setIsAddingList(false);
                         setNewListTitle("");
+                        setCopySourceListId(null);
                       }}
                       className="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high px-2 py-1.5 rounded-sm transition-colors text-sm font-medium"
                     >
@@ -314,7 +364,11 @@ export function KanbanBoard({
               ) : (
                 <button
                   type="button"
-                  onClick={() => setIsAddingList(true)}
+                  onClick={() => {
+                    setCopySourceListId(null);
+                    setNewListTitle("");
+                    setIsAddingList(true);
+                  }}
                   className="w-full bg-white/20 hover:bg-white/30 transition-colors text-white text-sm font-medium rounded-lg p-3 text-left flex items-center gap-2 backdrop-blur-sm"
                 >
                   <span className="text-lg leading-none">+</span> Add another
