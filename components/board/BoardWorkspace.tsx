@@ -9,7 +9,6 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronsLeftRight,
-  Filter,
   Image as ImageIcon,
   Inbox,
   LayoutDashboard,
@@ -213,6 +212,7 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     inbox: true,
     board: true,
   });
+  const [viewportWidth, setViewportWidth] = useState(1280);
   const [isSwitchBoardsOpen, setIsSwitchBoardsOpen] = useState(false);
   const [boardSearch, setBoardSearch] = useState("");
   const [availableBoards, setAvailableBoards] = useState<SwitchBoardItem[]>(
@@ -303,6 +303,30 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   }, [board.id, board.backgroundColor]);
 
   useEffect(() => {
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (window.innerWidth < 1024) {
+      setSurfaceVisibility({ inbox: false, board: true });
+      return;
+    }
+
+    setSurfaceVisibility({ inbox: true, board: true });
+  }, [board.id]);
+
+  useEffect(() => {
     if (!isArchivedItemsOpen) return;
 
     const controller = new AbortController();
@@ -367,12 +391,29 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     };
   }, [archivedItemsTab, archivedSearch, board.id, isArchivedItemsOpen]);
 
+  const isCompactBottomNav = viewportWidth < 520;
   const isInboxVisible = surfaceVisibility.inbox;
   const isBoardVisible = surfaceVisibility.board;
   const isSplitView = isInboxVisible && isBoardVisible;
   const isSingleSurfaceView = !isSplitView;
-  const inboxToggleLocked = isInboxVisible && !isBoardVisible;
-  const boardToggleLocked = isBoardVisible && !isInboxVisible;
+  const inboxToggleLocked = !isCompactBottomNav && isInboxVisible && !isBoardVisible;
+  const boardToggleLocked = !isCompactBottomNav && isBoardVisible && !isInboxVisible;
+
+  useEffect(() => {
+    if (!isCompactBottomNav) return;
+
+    setSurfaceVisibility((current) => {
+      if (current.inbox && current.board) {
+        return { inbox: false, board: true };
+      }
+
+      if (!current.inbox && !current.board) {
+        return { inbox: false, board: true };
+      }
+
+      return current;
+    });
+  }, [isCompactBottomNav]);
 
   const filteredBoards = useMemo(() => {
     const queryValue = boardSearch.trim().toLowerCase();
@@ -466,6 +507,12 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     selectedMemberIds.length > 0 ||
     dueDateFilter !== "all";
 
+  const activeFilterCount =
+    (query.trim().length > 0 ? 1 : 0) +
+    selectedLabelIds.length +
+    selectedMemberIds.length +
+    (dueDateFilter !== "all" ? 1 : 0);
+
   const railCards = useMemo(
     () => board.lists.flatMap((list) => list.cards).slice(0, 6),
     [board.lists],
@@ -502,6 +549,15 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   };
 
   const toggleSurface = (surface: "inbox" | "board") => {
+    if (isCompactBottomNav) {
+      setSurfaceVisibility(
+        surface === "inbox"
+          ? { inbox: true, board: false }
+          : { inbox: false, board: true },
+      );
+      return;
+    }
+
     setSurfaceVisibility((current) => {
       const next = {
         ...current,
@@ -699,7 +755,9 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
       <div
         className={cn(
           "flex h-full min-h-0 w-full",
-          isSplitView ? "gap-3 px-4 pb-4 pt-2" : "p-0",
+          isSplitView
+            ? "gap-3 overflow-x-auto px-4 pb-20 pt-2 [scrollbar-gutter:stable] sm:pb-4"
+            : "p-0 pb-16 sm:pb-0",
         )}
       >
         {isInboxVisible ? (
@@ -707,7 +765,7 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
             style={isSplitView ? { width: railWidth } : { width: "100%" }}
             className={cn(
               "min-h-0 overflow-hidden bg-[linear-gradient(180deg,rgba(80,59,128,0.94),rgba(108,69,140,0.94),rgba(151,84,133,0.92))] flex flex-col",
-              isSplitView ? "hidden shrink-0 lg:flex" : "flex-1",
+              isSplitView ? "flex min-w-[240px] shrink-0" : "flex-1",
               isSplitView
                 ? "rounded-[20px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.28)]"
                 : "rounded-none border-0 shadow-none",
@@ -786,10 +844,10 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
               "min-w-0 flex min-h-0 flex-1 flex-col overflow-hidden",
               isSingleSurfaceView
                 ? "w-full rounded-none border-0 shadow-none"
-                : "rounded-[22px] border border-white/10 shadow-[0_24px_60px_rgba(0,0,0,0.3)] backdrop-blur-sm",
+                : "min-w-[300px] rounded-[22px] border border-white/10 shadow-[0_24px_60px_rgba(0,0,0,0.3)] backdrop-blur-sm",
             )}
           >
-          <div className="flex h-14 items-center gap-3 border-b border-white/10 bg-black/14 px-4">
+          <div className="flex h-12 items-center gap-2 border-b border-white/10 bg-black/14 px-3 sm:h-14 sm:gap-3 sm:px-4">
             <div className="flex min-w-0 items-center gap-3">
               <EditableText
                 value={board.title}
@@ -800,193 +858,191 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                   }).catch(console.error);
                 }}
                 as="h1"
-                textClassName="text-[29px] text-white"
-                inputClassName="text-[29px] text-on-surface w-[260px]"
+                textClassName="text-[22px] leading-none text-white sm:text-[29px]"
+                inputClassName="w-[180px] text-[22px] leading-none text-on-surface sm:w-[260px] sm:text-[29px]"
                 className="rounded-md hover:bg-white/8"
               />
               <button
                 type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white max-[520px]:hidden"
               >
                 <Star className="h-4 w-4" />
               </button>
             </div>
 
             <div className="ml-auto flex min-w-0 items-center gap-2">
-              <div className="relative hidden w-[260px] shrink-0 xl:block">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/50" />
-                <input
-                  type="text"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search cards..."
-                  className="h-8 w-full rounded-md border border-white/10 bg-black/16 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/45 focus:border-white/20 focus:bg-black/24"
-                />
-              </div>
-
-              <div className="flex items-center gap-1 rounded-xl bg-black/12 p-1">
-                <Popover
-                  trigger={
-                    <button
-                      type="button"
-                      className={cn(
-                        "inline-flex h-8 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors",
-                        selectedLabelIds.length > 0
-                          ? "bg-white text-[#1d2125]"
-                          : "text-white/78 hover:bg-white/10 hover:text-white",
-                      )}
-                    >
-                      <Filter className="h-4 w-4" />
-                      Labels
-                    </button>
-                  }
-                  title="Labels"
-                  side="bottom"
-                  align="end"
-                >
-                  <div className="space-y-2">
-                    {board.labels.map((label) => {
-                      const isSelected = selectedLabelIds.includes(label.id);
-                      return (
-                        <button
-                          key={label.id}
-                          type="button"
-                          onClick={() =>
-                            toggleSelection(label.id, setSelectedLabelIds)
-                          }
-                          className={cn(
-                            "flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-surface-container",
-                            isSelected && "bg-primary-fixed",
-                          )}
-                        >
-                          <span
-                            className="h-8 w-12 shrink-0 rounded-sm"
-                            style={{ backgroundColor: label.color }}
-                          />
-                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-on-surface">
-                            {label.title}
-                          </span>
-                        </button>
-                      );
-                    })}
+              <Popover
+                trigger={
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex h-8 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors",
+                      hasActiveFilters
+                        ? "bg-white text-[#1d2125]"
+                        : "text-white/78 hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    <ListFilter className="h-4 w-4" />
+                    <span className="hidden md:inline">Filter</span>
+                    {activeFilterCount > 0 ? (
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#0c66e4] px-1 text-[11px] font-semibold text-white">
+                        {activeFilterCount}
+                      </span>
+                    ) : null}
+                  </button>
+                }
+                title="Filter"
+                side="bottom"
+                align="end"
+                contentClassName="w-[380px] max-w-[calc(100vw-1.25rem)] border border-white/10 bg-[#2b2e38] text-white"
+              >
+                <div className="max-h-[68vh] space-y-5 overflow-y-auto pr-1">
+                  <div>
+                    <p className="text-sm font-semibold text-white/78">Keyword</p>
+                    <div className="relative mt-2">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45" />
+                      <input
+                        type="text"
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="Enter a keyword..."
+                        className="h-10 w-full rounded-md border border-white/20 bg-black/14 pl-9 pr-3 text-sm text-white outline-none placeholder:text-white/45 focus:border-white/30 focus:bg-black/20"
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-white/56">
+                      Search cards, members, labels, and more.
+                    </p>
                   </div>
-                </Popover>
 
-                <Popover
-                  trigger={
-                    <button
-                      type="button"
-                      className={cn(
-                        "inline-flex h-8 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors",
-                        selectedMemberIds.length > 0
-                          ? "bg-white text-[#1d2125]"
-                          : "text-white/78 hover:bg-white/10 hover:text-white",
-                      )}
-                    >
-                      <Users className="h-4 w-4" />
-                      Members
-                    </button>
-                  }
-                  title="Members"
-                  side="bottom"
-                  align="end"
-                >
-                  <div className="space-y-2">
-                    {board.members.map(({ member }) => {
-                      const isSelected = selectedMemberIds.includes(member.id);
-                      return (
-                        <button
-                          key={member.id}
-                          type="button"
-                          onClick={() =>
-                            toggleSelection(member.id, setSelectedMemberIds)
-                          }
-                          className={cn(
-                            "flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-surface-container",
-                            isSelected && "bg-primary-fixed",
-                          )}
-                        >
-                          <Avatar
-                            src={member.avatarUrl}
-                            name={member.name}
-                            size="sm"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-on-surface">
+                  <div>
+                    <p className="text-sm font-semibold text-white/78">Members</p>
+                    <div className="mt-2 space-y-1.5">
+                      {board.members.map(({ member }) => {
+                        const isSelected = selectedMemberIds.includes(member.id);
+                        return (
+                          <button
+                            key={member.id}
+                            type="button"
+                            onClick={() => toggleSelection(member.id, setSelectedMemberIds)}
+                            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-white/8"
+                          >
+                            <span
+                              className={cn(
+                                "inline-flex h-4 w-4 items-center justify-center rounded-[3px] border",
+                                isSelected
+                                  ? "border-[#0c66e4] bg-[#0c66e4]"
+                                  : "border-white/30 bg-transparent",
+                              )}
+                            >
+                              {isSelected ? <Check className="h-3 w-3 text-white" /> : null}
+                            </span>
+                            <Avatar src={member.avatarUrl} name={member.name} size="sm" />
+                            <span className="truncate text-sm text-white/88">
                               {member.name}
-                            </p>
-                            <p className="truncate text-xs text-on-surface-variant">
-                              {member.email}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </Popover>
 
-                <Popover
-                  trigger={
-                    <button
-                      type="button"
-                      className={cn(
-                        "inline-flex h-8 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors",
-                        dueDateFilter !== "all"
-                          ? "bg-white text-[#1d2125]"
-                          : "text-white/78 hover:bg-white/10 hover:text-white",
-                      )}
-                    >
-                      <CalendarDays className="h-4 w-4" />
-                      Dates
-                    </button>
-                  }
-                  title="Due date"
-                  side="bottom"
-                  align="end"
-                >
-                  <div className="space-y-2">
-                    {[
-                      { value: "all", label: "Any due date" },
-                      { value: "overdue", label: "Overdue" },
-                      { value: "today", label: "Due today" },
-                      { value: "week", label: "Due this week" },
-                      { value: "none", label: "No due date" },
-                    ].map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() =>
-                          setDueDateFilter(option.value as DueDateFilter)
-                        }
-                        className={cn(
-                          "block w-full rounded-md px-2 py-2 text-left text-sm font-medium text-on-surface transition-colors hover:bg-surface-container",
-                          dueDateFilter === option.value &&
-                            "bg-primary-fixed text-primary",
-                        )}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-semibold text-white/78">
+                      <CalendarDays className="h-4 w-4 text-white/56" />
+                      Due date
+                    </p>
+                    <div className="mt-2 space-y-1.5">
+                      {[
+                        { value: "none", label: "No dates" },
+                        { value: "overdue", label: "Overdue" },
+                        { value: "today", label: "Due in the next day" },
+                        { value: "week", label: "Due in the next week" },
+                      ].map((option) => {
+                        const isSelected = dueDateFilter === option.value;
+
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() =>
+                              setDueDateFilter(
+                                isSelected
+                                  ? "all"
+                                  : (option.value as Exclude<DueDateFilter, "all">),
+                              )
+                            }
+                            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-white/8"
+                          >
+                            <span
+                              className={cn(
+                                "inline-flex h-4 w-4 items-center justify-center rounded-[3px] border",
+                                isSelected
+                                  ? "border-[#0c66e4] bg-[#0c66e4]"
+                                  : "border-white/30 bg-transparent",
+                              )}
+                            >
+                              {isSelected ? <Check className="h-3 w-3 text-white" /> : null}
+                            </span>
+                            <span className="text-sm text-white/88">{option.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </Popover>
 
-                {hasActiveFilters ? (
+                  <div>
+                    <p className="text-sm font-semibold text-white/78">Labels</p>
+                    <div className="mt-2 space-y-1.5">
+                      {board.labels.map((label) => {
+                        const isSelected = selectedLabelIds.includes(label.id);
+
+                        return (
+                          <button
+                            key={label.id}
+                            type="button"
+                            onClick={() => toggleSelection(label.id, setSelectedLabelIds)}
+                            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-white/8"
+                          >
+                            <span
+                              className={cn(
+                                "inline-flex h-4 w-4 items-center justify-center rounded-[3px] border",
+                                isSelected
+                                  ? "border-[#0c66e4] bg-[#0c66e4]"
+                                  : "border-white/30 bg-transparent",
+                              )}
+                            >
+                              {isSelected ? <Check className="h-3 w-3 text-white" /> : null}
+                            </span>
+                            <span
+                              className="h-8 min-w-0 flex-1 rounded-[4px]"
+                              style={{ backgroundColor: label.color }}
+                            />
+                            <span className="w-24 truncate text-xs text-white/72">
+                              {label.title}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
+                  <p className="text-xs text-white/58">
+                    {hasActiveFilters
+                      ? `${totalMatches} matching ${totalMatches === 1 ? "card" : "cards"}`
+                      : "No filters applied"}
+                  </p>
                   <button
                     type="button"
                     onClick={clearFilters}
-                    className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-sm font-medium text-white/78 transition-colors hover:bg-white/10 hover:text-white"
+                    disabled={!hasActiveFilters}
+                    className="inline-flex h-8 items-center rounded-md px-2.5 text-sm font-medium text-white/78 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    <X className="h-4 w-4" />
-                    Clear
+                    Clear all
                   </button>
-                ) : null}
-              </div>
-
-              {hasActiveFilters ? (
-                <span className="hidden rounded-md bg-white/12 px-2.5 py-1 text-xs font-medium text-white/82 xl:inline-flex">
-                  {totalMatches} {totalMatches === 1 ? "card" : "cards"}
-                </span>
-              ) : null}
+                </div>
+              </Popover>
 
               <Popover
                 trigger={
@@ -996,7 +1052,7 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                     aria-label="Board members"
                   >
                     <Users className="h-4 w-4" />
-                    <span className="hidden lg:inline">
+                    <span className="hidden sm:inline">
                       {board.members.length}
                     </span>
                   </button>
@@ -1041,7 +1097,7 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
 
               <button
                 type="button"
-                className="inline-flex h-8 items-center gap-2 rounded-lg bg-white/88 px-3 text-sm font-medium text-[#1d2125] transition-colors hover:bg-white"
+                className="hidden h-8 items-center gap-2 rounded-lg bg-white/88 px-3 text-sm font-medium text-[#1d2125] transition-colors hover:bg-white min-[900px]:inline-flex"
               >
                 <Share2 className="h-4 w-4" />
                 Share
@@ -1068,6 +1124,14 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                         Menu
                       </span>
                     </div>
+
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 rounded-md bg-white/7 px-3 py-2.5 text-left text-[15px] font-medium text-white/88 transition-colors hover:bg-white/12"
+                    >
+                      <Share2 className="h-5 w-5 text-white/72" />
+                      Share board
+                    </button>
 
                     <button
                       type="button"
@@ -1303,7 +1367,7 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
         ) : null}
       </div>
 
-      <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 hidden -translate-x-1/2 lg:block">
+      <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 hidden -translate-x-1/2 min-[521px]:block">
         <div className="pointer-events-auto flex items-center gap-1.5 rounded-2xl border border-white/10 bg-[#1d2125]/92 p-1.5 shadow-[0_16px_36px_rgba(0,0,0,0.32)] backdrop-blur-md">
           <button
             type="button"
@@ -1345,6 +1409,49 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
             <ChevronsLeftRight className="h-4 w-4" />
             Switch boards
           </button>
+        </div>
+      </div>
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 min-[521px]:hidden">
+        <div className="pointer-events-auto border-t border-white/10 bg-[#1d2125]/96 p-2 backdrop-blur-md">
+          <div className="grid grid-cols-3 gap-1">
+            <button
+              type="button"
+              onClick={() => toggleSurface("inbox")}
+              className={cn(
+                "inline-flex h-10 items-center justify-center rounded-lg transition-colors",
+                isInboxVisible
+                  ? "bg-[#0c66e4]/28 text-[#9ec3ff]"
+                  : "text-white/72 hover:bg-white/8 hover:text-white",
+              )}
+              aria-label="Inbox"
+            >
+              <Inbox className="h-4 w-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => toggleSurface("board")}
+              className={cn(
+                "inline-flex h-10 items-center justify-center rounded-lg transition-colors",
+                isBoardVisible
+                  ? "bg-[#0c66e4]/28 text-[#9ec3ff]"
+                  : "text-white/72 hover:bg-white/8 hover:text-white",
+              )}
+              aria-label="Board"
+            >
+              <LayoutDashboard className="h-4 w-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={openSwitchBoardsDialog}
+              className="inline-flex h-10 items-center justify-center rounded-lg text-white/72 transition-colors hover:bg-white/8 hover:text-white"
+              aria-label="Switch boards"
+            >
+              <ChevronsLeftRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1528,9 +1635,9 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
       <Dialog
         isOpen={isSwitchBoardsOpen}
         onClose={() => setIsSwitchBoardsOpen(false)}
-        className="max-w-[640px] border border-white/10 bg-[#2b2e38] text-white"
+        className="max-w-[640px] border border-white/10 bg-[#2b2e38] text-white max-sm:min-h-[calc(100vh-60px)] max-sm:max-w-none max-sm:rounded-none max-sm:border-x-0 max-sm:border-b-0"
       >
-        <div className="px-6 pb-6 pt-10">
+        <div className="px-4 pb-20 pt-4 sm:px-6 sm:pb-6 sm:pt-10">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/55" />

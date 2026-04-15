@@ -80,6 +80,7 @@ export function CardModal() {
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [newComment, setNewComment] = useState("");
   const [dueDateValue, setDueDateValue] = useState("");
+  const [isClosing, setIsClosing] = useState(false);
 
   useEffect(() => {
     if (!cardId) {
@@ -124,7 +125,16 @@ export function CardModal() {
     loadCard().catch(console.error);
   }, [cardId]);
 
+  useEffect(() => {
+    if (cardId) {
+      setIsClosing(false);
+    }
+  }, [cardId]);
+
   const handleClose = () => {
+    if (isClosing) return;
+
+    setIsClosing(true);
     const params = new URLSearchParams(searchParams.toString());
     params.delete("card");
     const query = params.toString();
@@ -158,7 +168,7 @@ export function CardModal() {
     });
   }, [boardLabels, labelQuery]);
 
-  if (!cardId) return null;
+  if (!cardId || isClosing) return null;
 
   const saveCardPatch = async (patch: Partial<CardDetail>) => {
     if (!card) return;

@@ -1,21 +1,24 @@
-import { Bell, CircleHelp, LayoutGrid, Megaphone, Search } from "lucide-react";
+"use client";
+
+import {
+  Bell,
+  CircleHelp,
+  LayoutGrid,
+  Megaphone,
+  MoreHorizontal,
+  Search,
+} from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
+import { Popover } from "@/components/ui/Popover";
 
 export function Navbar() {
   return (
-    <nav className="flex h-12 shrink-0 items-center gap-3 border-b border-white/10 bg-[#1a1d21] px-4 text-white">
-      <button
-        type="button"
-        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-        aria-label="Workspace menu"
-      >
-        <LayoutGrid className="h-4 w-4" />
-      </button>
-
+    <nav className="flex h-12 shrink-0 items-center gap-2 border-b border-white/10 bg-[#1a1d21] px-2.5 text-white sm:px-4">
       <Link
         href="/"
-        className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-white/8"
+        className="flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-white/8"
+        aria-label="Trello"
       >
         <div className="grid h-7 w-7 place-items-center rounded-md bg-[#0c66e4] shadow-[inset_0_-1px_0_rgba(0,0,0,0.24)]">
           <div className="flex gap-1">
@@ -23,11 +26,13 @@ export function Navbar() {
             <span className="block h-3.5 w-1.5 rounded-sm bg-white/85" />
           </div>
         </div>
-        <span className="text-[19px] font-semibold tracking-tight">Trello</span>
+        <span className="hidden text-[19px] font-semibold tracking-tight lg:inline">
+          Trello
+        </span>
       </Link>
 
-      <div className="mx-auto hidden max-w-[780px] flex-1 items-center gap-3 md:flex">
-        <div className="relative flex-1">
+      <div className="mx-auto flex max-w-[820px] flex-1 items-center justify-center gap-2 md:justify-start">
+        <div className="relative hidden flex-1 md:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45" />
           <input
             type="text"
@@ -35,6 +40,15 @@ export function Navbar() {
             className="h-8 w-full rounded-md border border-white/16 bg-white/6 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/45 focus:border-white/26 focus:bg-white/10"
           />
         </div>
+
+        <button
+          type="button"
+          aria-label="Search"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white md:hidden"
+        >
+          <Search className="h-4 w-4" />
+        </button>
+
         <button
           type="button"
           className="inline-flex h-8 items-center rounded-md bg-[#579dff] px-3 text-sm font-medium text-[#082145] transition-colors hover:bg-[#85b8ff]"
@@ -43,14 +57,7 @@ export function Navbar() {
         </button>
       </div>
 
-      <div className="ml-auto flex items-center gap-1">
-        <button
-          type="button"
-          className="hidden h-8 items-center rounded-md bg-[#d16cff] px-3 text-sm font-medium text-[#2c1333] md:inline-flex"
-        >
-          14 days left
-        </button>
-
+      <div className="ml-auto hidden items-center gap-1 min-[820px]:flex">
         {[
           { icon: Megaphone, label: "Announcements" },
           { icon: Bell, label: "Notifications" },
@@ -71,6 +78,49 @@ export function Navbar() {
           size="md"
           className="ml-1 bg-[#ff9f1a] text-[#2a1600]"
         />
+      </div>
+
+      <div className="ml-auto min-[820px]:hidden">
+        <Popover
+          trigger={
+            <button
+              type="button"
+              aria-label="More"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          }
+          side="bottom"
+          align="end"
+          contentClassName="w-[250px] border border-white/10 bg-[#2b2e38] text-white"
+        >
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
+              <Avatar
+                name="SK"
+                size="md"
+                className="bg-[#ff9f1a] text-[#2a1600]"
+              />
+              <span className="text-sm font-medium text-white/88">Account</span>
+            </div>
+
+            {[
+              { icon: Megaphone, label: "Feedback" },
+              { icon: Bell, label: "Notifications" },
+              { icon: CircleHelp, label: "Information" },
+            ].map(({ icon: Icon, label }) => (
+              <button
+                key={label}
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-white/86 transition-colors hover:bg-white/8"
+              >
+                <Icon className="h-4 w-4 text-white/65" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </Popover>
       </div>
     </nav>
   );
