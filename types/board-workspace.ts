@@ -44,6 +44,7 @@ export type WorkspaceList = {
   boardId: string;
   title: string;
   position: number;
+  color?: string | null;
   cards: WorkspaceCard[];
 };
 

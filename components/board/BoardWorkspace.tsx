@@ -47,6 +47,7 @@ import {
   getActiveFilterCount,
   getFilteredTrackWidth,
 } from "@/components/board/workspace/filtering";
+import { resolveListTone } from "@/components/board/list-column/constants";
 import { Avatar } from "@/components/ui/Avatar";
 import { EditableText } from "@/components/ui/EditableText";
 import { Popover } from "@/components/ui/Popover";
@@ -1060,60 +1061,67 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                     className="flex min-h-full min-w-full items-start gap-3 pb-2"
                     style={{ width: filteredTrackWidth }}
                   >
-                    {filteredLists.map((list) => (
-                      <div
-                        key={list.id}
-                        className="w-[272px] shrink-0 rounded-2xl border border-white/8 bg-[#181c1f]/92 p-2 text-white shadow-[0_12px_30px_rgba(0,0,0,0.24)]"
-                      >
-                        <div className="px-2 py-2">
-                          <h3 className="text-sm font-semibold text-white/92">
-                            {list.title}
-                          </h3>
-                          <p className="mt-1 text-xs text-white/48">
-                            {list.cards.length} matching cards
-                          </p>
+                    {filteredLists.map((list) => {
+                      const tone = resolveListTone(list.color, list.position);
+
+                      return (
+                        <div
+                          key={list.id}
+                          className={cn(
+                            "w-[272px] shrink-0 rounded-2xl border border-white/8 p-2 text-white shadow-[0_12px_30px_rgba(0,0,0,0.24)]",
+                            tone.shell,
+                          )}
+                        >
+                          <div className="px-2 py-2">
+                            <h3 className={cn("text-sm font-semibold", tone.header)}>
+                              {list.title}
+                            </h3>
+                            <p className="mt-1 text-xs text-white/48">
+                              {list.cards.length} matching cards
+                            </p>
+                          </div>
+
+                          <div className="space-y-2 px-1 pb-1">
+                            {list.cards.map((card) => {
+                              const dueDate = card.dueDate
+                                ? new Date(card.dueDate)
+                                : null;
+
+                              return (
+                                <button
+                                  key={card.id}
+                                  type="button"
+                                  onClick={() => openCard(card.id)}
+                                  className="w-full rounded-xl border border-white/6 bg-[#24282d] p-3 text-left text-white transition-colors hover:bg-[#2a2f35]"
+                                >
+                                  {card.labels.length > 0 ? (
+                                    <div className="mb-2 flex flex-wrap gap-1">
+                                      {card.labels.map(({ id, label }) => (
+                                        <span
+                                          key={id}
+                                          className="h-2 w-10 rounded-xs"
+                                          style={{ backgroundColor: label.color }}
+                                        />
+                                      ))}
+                                    </div>
+                                  ) : null}
+
+                                  <h4 className="text-sm font-medium text-white/90">
+                                    {card.title}
+                                  </h4>
+
+                                  {dueDate ? (
+                                    <p className="mt-2 text-xs text-white/52">
+                                      Due {format(dueDate, "MMM d")}
+                                    </p>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-
-                        <div className="space-y-2 px-1 pb-1">
-                          {list.cards.map((card) => {
-                            const dueDate = card.dueDate
-                              ? new Date(card.dueDate)
-                              : null;
-
-                            return (
-                              <button
-                                key={card.id}
-                                type="button"
-                                onClick={() => openCard(card.id)}
-                                className="w-full rounded-xl border border-white/6 bg-[#24282d] p-3 text-left text-white transition-colors hover:bg-[#2a2f35]"
-                              >
-                                {card.labels.length > 0 ? (
-                                  <div className="mb-2 flex flex-wrap gap-1">
-                                    {card.labels.map(({ id, label }) => (
-                                      <span
-                                        key={id}
-                                        className="h-2 w-10 rounded-xs"
-                                        style={{ backgroundColor: label.color }}
-                                      />
-                                    ))}
-                                  </div>
-                                ) : null}
-
-                                <h4 className="text-sm font-medium text-white/90">
-                                  {card.title}
-                                </h4>
-
-                                {dueDate ? (
-                                  <p className="mt-2 text-xs text-white/52">
-                                    Due {format(dueDate, "MMM d")}
-                                  </p>
-                                ) : null}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="flex h-full items-center justify-center">
