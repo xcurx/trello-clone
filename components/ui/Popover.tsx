@@ -65,7 +65,7 @@ export function Popover({
   if (align === "center" && (side === "bottom" || side === "top")) alignClasses = "left-1/2 -translate-x-1/2";
 
   return (
-    <div className="relative w-full" ref={containerRef}>
+    <div className="relative inline-block" ref={containerRef}>
       <div onClick={() => setIsOpen(!isOpen)}>{trigger}</div>
       
       {isOpen && (

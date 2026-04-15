@@ -170,6 +170,11 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     [filteredLists],
   );
 
+  const filteredTrackWidth = useMemo(() => {
+    if (filteredLists.length === 0) return 0;
+    return 272 * filteredLists.length + 12 * (filteredLists.length - 1);
+  }, [filteredLists.length]);
+
   const hasActiveFilters =
     query.trim().length > 0 ||
     selectedLabelIds.length > 0 ||
@@ -212,8 +217,8 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   };
 
   return (
-    <div className="relative flex-1 overflow-hidden bg-[#1d2125]">
-      <div className="flex h-full gap-3 px-4 pb-4 pt-2">
+    <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-[#1d2125]">
+      <div className="flex h-full min-h-0 gap-3 px-4 pb-4 pt-2">
         <aside
           style={{ width: railWidth }}
           className="hidden shrink-0 overflow-hidden rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(80,59,128,0.94),rgba(108,69,140,0.94),rgba(151,84,133,0.92))] shadow-[0_20px_50px_rgba(0,0,0,0.28)] lg:flex lg:flex-col"
@@ -283,7 +288,7 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
 
         <ResizableSeparator onResize={resizeRail} />
 
-        <section className="min-w-0 flex-1 overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(111,73,140,0.36)_0%,rgba(118,76,140,0.2)_100%)] shadow-[0_24px_60px_rgba(0,0,0,0.3)] backdrop-blur-sm">
+        <section className="min-w-0 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(111,73,140,0.36)_0%,rgba(118,76,140,0.2)_100%)] shadow-[0_24px_60px_rgba(0,0,0,0.3)] backdrop-blur-sm">
           <div className="flex h-14 items-center gap-3 border-b border-white/10 bg-black/14 px-4">
             <div className="flex min-w-0 items-center gap-3">
               <EditableText
@@ -483,17 +488,56 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                 </span>
               ) : null}
 
-              <div className="hidden items-center gap-1 md:flex">
-                {board.members.slice(0, 3).map(({ id, member }) => (
-                  <Avatar
-                    key={id}
-                    src={member.avatarUrl}
-                    name={member.name}
-                    size="sm"
-                    className="-ml-1 border border-[#1d2125] first:ml-0"
-                  />
-                ))}
-              </div>
+              <Popover
+                trigger={
+                  <button
+                    type="button"
+                    className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-sm font-medium text-white/78 transition-colors hover:bg-white/10 hover:text-white"
+                    aria-label="Board members"
+                  >
+                    <Users className="h-4 w-4" />
+                    <span className="hidden lg:inline">
+                      {board.members.length}
+                    </span>
+                  </button>
+                }
+                title="Board members"
+                side="bottom"
+                align="end"
+                contentClassName="w-80"
+              >
+                {board.members.length === 0 ? (
+                  <p className="text-sm text-on-surface-variant">
+                    No members added to this board.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {board.members.map(({ id, role, member }) => (
+                      <div
+                        key={id}
+                        className="flex items-center gap-3 rounded-md px-2 py-2"
+                      >
+                        <Avatar
+                          src={member.avatarUrl}
+                          name={member.name}
+                          size="sm"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-on-surface">
+                            {member.name}
+                          </p>
+                          <p className="truncate text-xs text-on-surface-variant">
+                            {member.email}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-surface-container px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-on-surface-variant">
+                          {role}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Popover>
 
               <button
                 type="button"
@@ -512,11 +556,14 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
             </div>
           </div>
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             {hasActiveFilters ? (
-              <div className="h-full overflow-auto px-3 py-3">
+              <div className="h-full overflow-x-scroll overflow-y-auto px-3 py-3 [scrollbar-gutter:stable]">
                 {totalMatches > 0 ? (
-                  <div className="flex min-h-full items-start gap-3">
+                  <div
+                    className="flex min-h-full min-w-full items-start gap-3 pb-2"
+                    style={{ width: filteredTrackWidth }}
+                  >
                     {filteredLists.map((list) => (
                       <div
                         key={list.id}

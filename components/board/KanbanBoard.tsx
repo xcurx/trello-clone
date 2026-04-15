@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  closestCenter,
   closestCorners,
+  type CollisionDetection,
   DndContext,
   type DragEndEvent,
   type DragOverEvent,
@@ -19,9 +21,9 @@ import {
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { EditableText } from "@/components/ui/EditableText";
 import {
-  reorderCardsAction,
   reorderListsAction,
 } from "@/lib/actions/board.actions";
 import { KanbanCard } from "../card/KanbanCard";
@@ -85,6 +87,7 @@ export function KanbanBoard({
   hideHeader = false,
 }: KanbanBoardProps) {
   const [board, setBoard] = useState(initialBoard);
+  const boardRef = useRef(initialBoard);
   const [activeCard, setActiveCard] = useState<BoardCard | null>(null);
   const [activeList, setActiveList] = useState<BoardList | null>(null);
 
@@ -134,8 +137,14 @@ export function KanbanBoard({
   }, []);
 
   useEffect(() => {
-    setBoard(initialBoard);
+    setBoard((current) =>
+      current.id === initialBoard.id ? current : initialBoard,
+    );
   }, [initialBoard]);
+
+  useEffect(() => {
+    boardRef.current = board;
+  }, [board]);
 
   useEffect(() => {
     if (isAddingList) {
@@ -154,12 +163,65 @@ export function KanbanBoard({
     }),
   );
 
+  const boardTrackWidth = useMemo(() => {
+    // Track width: N lists + 1 add-list column + gaps between columns.
+    return 272 * (board.lists.length + 1) + 12 * board.lists.length;
+  }, [board.lists.length]);
+
+  const collisionDetectionStrategy: CollisionDetection = (args) => {
+    if (args.active.data.current?.type === "List") {
+      return closestCenter({
+        ...args,
+        droppableContainers: args.droppableContainers.filter(
+          (container) => container.data.current?.type === "List",
+        ),
+      });
+    }
+
+    return closestCorners(args);
+  };
+
+  const patchJson = async (url: string, payload: unknown) => {
+    const response = await fetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    let data: unknown = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      const message =
+        data && typeof data === "object" && "error" in data
+          ? String((data as { error?: unknown }).error)
+          : "Request failed";
+      throw new Error(message);
+    }
+  };
+
+  const persistCardsReorder = async (listId: string, orderedIds: string[]) => {
+    await patchJson("/api/cards/reorder", { listId, orderedIds });
+  };
+
+  const persistCardMove = async (
+    cardId: string,
+    targetListId: string,
+    position: number,
+  ) => {
+    await patchJson(`/api/cards/${cardId}/move`, { targetListId, position });
+  };
+
   if (!isMounted) {
     return <div className="flex-1 w-full bg-transparent" />; // Wait for client
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Board Header */}
       {hideHeader ? null : (
         <div className="h-[52px] bg-black/20 backdrop-blur-sm shadow-sm flex items-center px-4 shrink-0 justify-between text-white z-10 relative">
@@ -182,7 +244,7 @@ export function KanbanBoard({
 
       {/* Board Canvas */}
       <div
-        className="flex-1 w-full overflow-x-auto overflow-y-hidden p-3"
+        className="flex-1 min-h-0 w-full overflow-x-scroll overflow-y-hidden p-3 [scrollbar-gutter:stable]"
         style={{
           background:
             board.backgroundColor === "snow"
@@ -193,12 +255,15 @@ export function KanbanBoard({
         <DndContext
           id="board-sortable-context"
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={collisionDetectionStrategy}
           onDragStart={onDragStart}
           onDragOver={onDragOver}
           onDragEnd={onDragEnd}
         >
-          <div className="flex items-start gap-3 h-full">
+          <div
+            className="flex min-h-full min-w-full items-start gap-3 pb-2"
+            style={{ width: boardTrackWidth }}
+          >
             <SortableContext
               items={listsId}
               strategy={horizontalListSortingStrategy}
@@ -259,10 +324,16 @@ export function KanbanBoard({
             </div>
           </div>
 
-          <DragOverlay>
-            {activeList ? <ListColumn list={activeList} isOverlay /> : null}
-            {activeCard ? <KanbanCard card={activeCard} isOverlay /> : null}
-          </DragOverlay>
+          {isMounted
+            ? createPortal(
+                <DragOverlay adjustScale={false}>
+                  {activeList ? <ListColumn list={activeList} isOverlay /> : null}
+                  {activeCard ? <KanbanCard card={activeCard} isOverlay /> : null}
+                </DragOverlay>,
+                document.body,
+              )
+            : null}
+
         </DndContext>
       </div>
     </div>
@@ -285,89 +356,39 @@ export function KanbanBoard({
 
   function onDragOver(event: DragOverEvent) {
     const { active, over } = event;
-    if (!over) return;
 
-    const activeId = active.id;
-    const overId = over.id;
+    if (!over) return;
+    if (active.data.current?.type !== "List") return;
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
 
     if (activeId === overId) return;
 
-    const isActiveACard = active.data.current?.type === "Card";
-    const isOverACard = over.data.current?.type === "Card";
-    const isOverAList = over.data.current?.type === "List";
-
-    if (!isActiveACard) return;
-
-    // Moving a card
     setBoard((prevBoard) => {
-      const activeList = prevBoard.lists.find(
-        (list) => list.id === active.data.current?.sortable.containerId,
-      );
-      const overList = isOverAList
-        ? prevBoard.lists.find((list) => list.id === overId)
-        : prevBoard.lists.find(
-            (list) => list.id === over.data.current?.sortable.containerId,
-          );
-
-      if (!activeList || !overList) return prevBoard;
-
       const activeListIndex = prevBoard.lists.findIndex(
-        (list) => list.id === activeList.id,
+        (list) => list.id === activeId,
       );
       const overListIndex = prevBoard.lists.findIndex(
-        (list) => list.id === overList.id,
+        (list) => list.id === overId,
       );
 
-      const activeCardIndex = activeList.cards.findIndex(
-        (card) => card.id === activeId,
-      );
-
-      // Same list drop is handled in DragEnd for sorting. DragOver just needs cross-list.
-      if (activeList.id !== overList.id) {
-        let overCardIndex = overList.cards.length;
-        if (isOverACard) {
-          overCardIndex = overList.cards.findIndex(
-            (card) => card.id === overId,
-          );
-          const isBelowOverItem =
-            over &&
-            active.rect.current.translated &&
-            active.rect.current.translated.top >
-              over.rect.top + over.rect.height;
-
-          const modifier = isBelowOverItem ? 1 : 0;
-          overCardIndex =
-            overCardIndex >= 0
-              ? overCardIndex + modifier
-              : overList.cards.length + 1;
-        }
-
-        const newLists = [...prevBoard.lists];
-        const sourceList = {
-          ...newLists[activeListIndex],
-          cards: [...newLists[activeListIndex].cards],
-        };
-        const destList = {
-          ...newLists[overListIndex],
-          cards: [...newLists[overListIndex].cards],
-        };
-
-        const [movedCard] = sourceList.cards.splice(activeCardIndex, 1);
-        movedCard.listId = destList.id; // Update list relation locally
-
-        destList.cards.splice(overCardIndex, 0, movedCard);
-
-        newLists[activeListIndex] = sourceList;
-        newLists[overListIndex] = destList;
-
-        return { ...prevBoard, lists: newLists };
+      if (
+        activeListIndex < 0 ||
+        overListIndex < 0 ||
+        activeListIndex === overListIndex
+      ) {
+        return prevBoard;
       }
 
-      return prevBoard;
+      return {
+        ...prevBoard,
+        lists: arrayMove(prevBoard.lists, activeListIndex, overListIndex),
+      };
     });
   }
 
-  function onDragEnd(event: DragEndEvent) {
+  async function onDragEnd(event: DragEndEvent) {
     setActiveCard(null);
     setActiveList(null);
 
@@ -376,65 +397,163 @@ export function KanbanBoard({
 
     const activeId = String(active.id);
     const overId = String(over.id);
-
-    if (activeId === overId) return;
-
-    let targetAction: (() => void) | null = null;
-    let newBoardLists = [...board.lists];
+    const currentBoard = boardRef.current;
 
     const isListDrag = active.data.current?.type === "List";
 
     if (isListDrag) {
-      const activeListIndex = board.lists.findIndex(
+      const activeListIndex = currentBoard.lists.findIndex(
         (list) => list.id === activeId,
       );
-      const overListIndex = board.lists.findIndex((list) => list.id === overId);
-
-      newBoardLists = arrayMove(board.lists, activeListIndex, overListIndex);
-      targetAction = () =>
-        reorderListsAction(
-          board.id,
-          newBoardLists.map((list) => list.id),
-        );
-    } else {
-      const activeListIndex = board.lists.findIndex((list) =>
-        list.cards.some((card) => card.id === activeId),
+      const overListIndex = currentBoard.lists.findIndex(
+        (list) => list.id === overId,
       );
 
-      if (activeListIndex !== -1) {
-        const activeList = board.lists[activeListIndex];
-        const activeCardIndex = activeList.cards.findIndex(
-          (card) => card.id === activeId,
+      if (activeListIndex < 0 || overListIndex < 0) return;
+
+      const newBoardLists =
+        activeListIndex === overListIndex
+          ? currentBoard.lists
+          : arrayMove(currentBoard.lists, activeListIndex, overListIndex);
+
+      if (activeListIndex !== overListIndex) {
+        const updatedBoard = { ...currentBoard, lists: newBoardLists };
+        boardRef.current = updatedBoard;
+        setBoard(updatedBoard);
+      }
+
+      reorderListsAction(
+        currentBoard.id,
+        newBoardLists.map((list) => list.id),
+      );
+      return;
+    }
+
+    if (active.data.current?.type !== "Card") return;
+
+    const sourceListIndex = currentBoard.lists.findIndex((list) =>
+      list.cards.some((card) => card.id === activeId),
+    );
+    if (sourceListIndex < 0) return;
+
+    const sourceCardIndex = currentBoard.lists[sourceListIndex].cards.findIndex(
+      (card) => card.id === activeId,
+    );
+    if (sourceCardIndex < 0) return;
+
+    const overType = over.data.current?.type;
+    const destinationListId =
+      overType === "List"
+        ? overId
+        : (over.data.current?.sortable?.containerId as string | undefined);
+
+    if (!destinationListId) return;
+
+    const destinationListIndex = currentBoard.lists.findIndex(
+      (list) => list.id === destinationListId,
+    );
+    if (destinationListIndex < 0) return;
+
+    const isSameListMove = sourceListIndex === destinationListIndex;
+
+    if (isSameListMove) {
+      const listCards = currentBoard.lists[sourceListIndex].cards;
+      const overCardIndex =
+        overType === "Card"
+          ? listCards.findIndex((card) => card.id === overId)
+          : listCards.length - 1;
+
+      if (overCardIndex < 0 || sourceCardIndex === overCardIndex) {
+        return;
+      }
+
+      const newBoardLists = currentBoard.lists.map((list, index) =>
+        index === sourceListIndex
+          ? {
+              ...list,
+              cards: arrayMove(list.cards, sourceCardIndex, overCardIndex),
+            }
+          : { ...list, cards: [...list.cards] },
+      );
+
+      const updatedBoard = { ...currentBoard, lists: newBoardLists };
+      boardRef.current = updatedBoard;
+      setBoard(updatedBoard);
+
+      try {
+        await persistCardsReorder(
+          newBoardLists[sourceListIndex].id,
+          newBoardLists[sourceListIndex].cards.map((card) => card.id),
         );
-        let overCardIndex = activeList.cards.findIndex(
-          (card) => card.id === overId,
-        );
+      } catch (error) {
+        console.error("Failed to persist same-list card reorder", error);
+        boardRef.current = currentBoard;
+        setBoard(currentBoard);
+      }
+      return;
+    }
 
-        if (overCardIndex === -1) {
-          // If overId is a list instead of a card, it won't be found in cards.
-          overCardIndex = activeList.cards.length - 1;
-        }
+    const newBoardLists = currentBoard.lists.map((list) => ({
+      ...list,
+      cards: [...list.cards],
+    }));
 
-        const newList = {
-          ...activeList,
-          cards: arrayMove(activeList.cards, activeCardIndex, overCardIndex),
-        };
+    const [movedCard] = newBoardLists[sourceListIndex].cards.splice(
+      sourceCardIndex,
+      1,
+    );
 
-        newBoardLists[activeListIndex] = newList;
-        targetAction = () =>
-          reorderCardsAction(
-            newList.id,
-            newList.cards.map((card) => card.id),
-          );
+    let destinationCardIndex =
+      overType === "Card"
+        ? newBoardLists[destinationListIndex].cards.findIndex(
+            (card) => card.id === overId,
+          )
+        : newBoardLists[destinationListIndex].cards.length;
+
+    if (destinationCardIndex < 0) {
+      destinationCardIndex = newBoardLists[destinationListIndex].cards.length;
+    }
+
+    if (overType === "Card") {
+      const isBelowOverItem =
+        !!active.rect.current.translated &&
+        active.rect.current.translated.top >
+          over.rect.top + over.rect.height / 2;
+
+      if (isBelowOverItem) {
+        destinationCardIndex += 1;
       }
     }
 
-    // Apply strict UI update first
-    setBoard({ ...board, lists: newBoardLists });
+    movedCard.listId = destinationListId;
+    newBoardLists[destinationListIndex].cards.splice(
+      destinationCardIndex,
+      0,
+      movedCard,
+    );
 
-    // Execute backend sync outside React render phase
-    if (targetAction) {
-      targetAction();
+    const updatedBoard = { ...currentBoard, lists: newBoardLists };
+    boardRef.current = updatedBoard;
+    setBoard(updatedBoard);
+
+    const sourceListId = newBoardLists[sourceListIndex].id;
+    const destinationListIdFinal = newBoardLists[destinationListIndex].id;
+
+    try {
+      await persistCardMove(activeId, destinationListIdFinal, destinationCardIndex);
+
+      await persistCardsReorder(
+        sourceListId,
+        newBoardLists[sourceListIndex].cards.map((card) => card.id),
+      );
+      await persistCardsReorder(
+        destinationListIdFinal,
+        newBoardLists[destinationListIndex].cards.map((card) => card.id),
+      );
+    } catch (error) {
+      console.error("Failed to persist cross-list card move", error);
+      boardRef.current = currentBoard;
+      setBoard(currentBoard);
     }
   }
 }

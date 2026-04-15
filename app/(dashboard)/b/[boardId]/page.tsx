@@ -53,7 +53,7 @@ export default async function BoardPage({ params }: PageProps) {
 
   return (
     <div
-      className="relative flex h-full w-full flex-1 flex-col"
+      className="relative flex h-full min-h-0 w-full flex-1 flex-col"
       style={bgStyle}
     >
       <BoardWorkspace board={transformedBoard} />

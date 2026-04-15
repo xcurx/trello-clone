@@ -42,7 +42,19 @@ interface KanbanCardProps {
   isOverlay?: boolean;
 }
 
-export function KanbanCard({ card, isOverlay }: KanbanCardProps) {
+export function KanbanCard({ card, isOverlay = false }: KanbanCardProps) {
+  if (isOverlay) {
+    return (
+      <div className="rotate-2 rounded-xl border border-white/6 bg-[#2b3036] p-3 text-left shadow-card-drag opacity-95">
+        <CardContent card={card} />
+      </div>
+    );
+  }
+
+  return <SortableKanbanCard card={card} />;
+}
+
+function SortableKanbanCard({ card }: { card: KanbanCardData }) {
   const {
     setNodeRef,
     attributes,
@@ -77,12 +89,6 @@ export function KanbanCard({ card, isOverlay }: KanbanCardProps) {
     );
   }
 
-  const labels = card.labels?.map((entry) => entry.label) || [];
-  const checklistTotal =
-    card.checklistItems?.length ?? card._count?.checklistItems ?? 0;
-  const checklistDone = card.checklistDone ?? 0;
-  const members = card.members?.map((entry) => entry.member) || [];
-
   const handleOpenCard = () => {
     const params = new URLSearchParams(searchParams.toString());
     params.set("card", card.id);
@@ -98,10 +104,23 @@ export function KanbanCard({ card, isOverlay }: KanbanCardProps) {
       {...listeners}
       onClick={handleOpenCard}
       className={cn(
-        "group cursor-pointer rounded-xl border border-white/6 bg-[#2b3036] p-3 shadow-[0_8px_18px_rgba(0,0,0,0.22)] transition-all hover:border-white/10 hover:bg-[#323840] hover:shadow-[0_14px_26px_rgba(0,0,0,0.28)] active:cursor-grabbing",
-        isOverlay && "rotate-2 opacity-95 shadow-card-drag",
+        "group cursor-pointer rounded-xl border border-white/6 bg-[#2b3036] p-3 text-left shadow-[0_8px_18px_rgba(0,0,0,0.22)] transition-all hover:border-white/10 hover:bg-[#323840] hover:shadow-[0_14px_26px_rgba(0,0,0,0.28)] active:cursor-grabbing",
       )}
     >
+      <CardContent card={card} />
+    </button>
+  );
+}
+
+function CardContent({ card }: { card: KanbanCardData }) {
+  const labels = card.labels?.map((entry) => entry.label) || [];
+  const checklistTotal =
+    card.checklistItems?.length ?? card._count?.checklistItems ?? 0;
+  const checklistDone = card.checklistDone ?? 0;
+  const members = card.members?.map((entry) => entry.member) || [];
+
+  return (
+    <>
       {card.coverColor ? (
         <div
           className="mb-2 h-1.5 w-full rounded-full"
@@ -122,7 +141,7 @@ export function KanbanCard({ card, isOverlay }: KanbanCardProps) {
         </div>
       ) : null}
 
-      <h4 className="mb-3 whitespace-pre-wrap break-words text-[14px] font-medium leading-[1.35] text-white/92">
+      <h4 className="mb-3 whitespace-pre-wrap break-words text-left text-[14px] font-medium leading-[1.35] text-white/92">
         {card.title}
       </h4>
 
@@ -152,6 +171,6 @@ export function KanbanCard({ card, isOverlay }: KanbanCardProps) {
           </div>
         ) : null}
       </div>
-    </button>
+    </>
   );
 }

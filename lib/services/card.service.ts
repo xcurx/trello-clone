@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
 export const cardService = {
@@ -68,39 +69,83 @@ export const cardService = {
   },
 
   async move(cardId: string, targetListId: string, position: number) {
-    await prisma.card.updateMany({
-      where: {
-        listId: targetListId,
-        position: { gte: position },
-        isArchived: false,
-      },
-      data: {
-        position: { increment: 1 },
-      },
-    });
+    return prisma.$transaction(async (tx) => {
+      const existingCard = await tx.card.findUnique({
+        where: { id: cardId },
+        select: { listId: true },
+      });
 
-    return prisma.card.update({
-      where: { id: cardId },
-      data: {
-        listId: targetListId,
-        position,
-      },
-      include: {
-        labels: { include: { label: true } },
-        members: { include: { member: true } },
-        _count: { select: { checklistItems: true, comments: true } },
-      },
+      if (!existingCard) {
+        throw new Error("Card not found");
+      }
+
+      const lockListIds = Array.from(
+        new Set([existingCard.listId, targetListId]),
+      ).sort();
+
+      for (const listId of lockListIds) {
+        await tx.$executeRaw`
+          SELECT pg_advisory_xact_lock(72101, hashtext(${listId}))
+        `;
+      }
+
+      await tx.card.updateMany({
+        where: {
+          listId: targetListId,
+          position: { gte: position },
+          isArchived: false,
+        },
+        data: {
+          position: { increment: 1 },
+        },
+      });
+
+      return tx.card.update({
+        where: { id: cardId },
+        data: {
+          listId: targetListId,
+          position,
+        },
+        include: {
+          labels: { include: { label: true } },
+          members: { include: { member: true } },
+          _count: { select: { checklistItems: true, comments: true } },
+        },
+      });
     });
   },
 
   async reorder(listId: string, orderedIds: string[]) {
-    const updates = orderedIds.map((id, index) =>
-      prisma.card.update({
-        where: { id },
-        data: { position: index, listId },
-      }),
-    );
-    return prisma.$transaction(updates);
+    const uniqueOrderedIds = Array.from(new Set(orderedIds));
+
+    if (uniqueOrderedIds.length === 0) {
+      return { reordered: 0 };
+    }
+
+    return prisma.$transaction(async (tx) => {
+      // Serialize reorder operations per list to avoid row-lock deadlocks
+      // when multiple drag operations hit the same list concurrently.
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(72101, hashtext(${listId}))
+      `;
+
+      const values = Prisma.join(
+        uniqueOrderedIds.map((id, index) =>
+          Prisma.sql`(${id}::text, ${index}::int)`,
+        ),
+      );
+
+      const updated = await tx.$executeRaw`
+        UPDATE "cards" AS c
+        SET
+          "position" = v.position,
+          "listId" = ${listId}
+        FROM (VALUES ${values}) AS v(id, position)
+        WHERE c."id" = v.id
+      `;
+
+      return { reordered: updated };
+    });
   },
 
   async search(

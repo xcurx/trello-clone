@@ -43,6 +43,14 @@ const LIST_TONES = [
 ];
 
 export function ListColumn({ list, isOverlay = false }: ListColumnProps) {
+  if (isOverlay) {
+    return <ListColumnOverlay list={list} />;
+  }
+
+  return <SortableListColumn list={list} />;
+}
+
+function SortableListColumn({ list }: { list: ListColumnProps["list"] }) {
   const cardsIds = useMemo(
     () => list.cards.map((card) => card.id),
     [list.cards],
@@ -123,7 +131,6 @@ export function ListColumn({ list, isOverlay = false }: ListColumnProps) {
       className={cn(
         "flex max-h-full w-[272px] shrink-0 flex-col overflow-hidden rounded-2xl border text-white shadow-[0_14px_34px_rgba(0,0,0,0.24)] backdrop-blur-sm",
         tone.shell,
-        isOverlay && "rotate-2 opacity-90 shadow-card-drag",
       )}
     >
       <div
@@ -159,6 +166,7 @@ export function ListColumn({ list, isOverlay = false }: ListColumnProps) {
 
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2 pt-2">
         <SortableContext
+          id={list.id}
           items={cardsIds}
           strategy={verticalListSortingStrategy}
         >
@@ -221,6 +229,43 @@ export function ListColumn({ list, isOverlay = false }: ListColumnProps) {
             Add a card
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ListColumnOverlay({ list }: { list: ListColumnProps["list"] }) {
+  const tone = LIST_TONES[list.position % LIST_TONES.length];
+
+  return (
+    <div
+      className={cn(
+        "flex max-h-full w-[272px] shrink-0 flex-col overflow-hidden rounded-2xl border text-white shadow-card-drag backdrop-blur-sm",
+        tone.shell,
+        "rotate-2 opacity-90",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center justify-between border-b border-white/8 px-3 py-3",
+          tone.header,
+        )}
+      >
+        <h3 className="min-w-0 flex-1 truncate text-base font-semibold">
+          {list.title}
+        </h3>
+        <MoreHorizontal className="h-4 w-4 text-current/72" />
+      </div>
+
+      <div className="flex flex-1 flex-col gap-2 overflow-hidden px-2 pb-2 pt-2">
+        {list.cards.slice(0, 4).map((card) => (
+          <div
+            key={card.id}
+            className="rounded-xl border border-white/6 bg-[#2b3036] p-3 text-sm font-medium text-white/90 shadow-[0_8px_18px_rgba(0,0,0,0.22)]"
+          >
+            {card.title}
+          </div>
+        ))}
       </div>
     </div>
   );
