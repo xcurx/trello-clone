@@ -6,36 +6,9 @@ import { AlignLeft, CheckSquare, Clock } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/utils";
+import type { KanbanCardData } from "@/types/kanban-card";
 
-export interface KanbanCardData {
-  id: string;
-  title: string;
-  description?: string | null;
-  dueDate?: string | Date | null;
-  coverColor?: string | null;
-  checklistDone?: number;
-  checklistItems?: unknown[];
-  labels?: Array<{
-    id: string;
-    label: {
-      id: string;
-      title: string;
-      color: string;
-    };
-  }>;
-  members?: Array<{
-    id: string;
-    member: {
-      id: string;
-      name: string;
-      avatarUrl: string | null;
-    };
-  }>;
-  _count?: {
-    checklistItems?: number;
-    comments?: number;
-  };
-}
+export type { KanbanCardData };
 
 interface KanbanCardProps {
   card: KanbanCardData;

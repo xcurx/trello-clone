@@ -1,6 +1,6 @@
 "use client";
 
-import { format, isAfter, isBefore, isToday } from "date-fns";
+import { format } from "date-fns";
 import {
   Archive,
   ArrowLeft,
@@ -19,184 +19,52 @@ import {
   Search,
   Share2,
   Star,
-  RotateCcw,
-  Trash2,
   Users,
-  X,
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  type Dispatch,
-  type SetStateAction,
   useDeferredValue,
   useEffect,
   useMemo,
   useState,
 } from "react";
+import {
+  fetchArchivedItems,
+  fetchSwitchBoards,
+  patchBoardBackground,
+  requestArchivedAction,
+} from "@/components/board/workspace/api";
+import {
+  BOARD_BACKGROUND_OPTIONS,
+  BOARD_PREVIEW_GRADIENTS,
+  DUE_DATE_FILTER_OPTIONS,
+  RAIL_MAX_WIDTH,
+  RAIL_MIN_WIDTH,
+  resolveBoardBackgroundGradient,
+} from "@/components/board/workspace/constants";
+import {
+  filterBoardLists,
+  getActiveFilterCount,
+  getFilteredTrackWidth,
+} from "@/components/board/workspace/filtering";
 import { Avatar } from "@/components/ui/Avatar";
-import { Dialog } from "@/components/ui/Dialog";
 import { EditableText } from "@/components/ui/EditableText";
 import { Popover } from "@/components/ui/Popover";
 import { ResizableSeparator } from "@/components/ui/ResizableSeparator";
 import { cn } from "@/lib/utils";
+import type {
+  ArchivedCardItem,
+  ArchivedItemsTab,
+  ArchivedListItem,
+  BoardBackgroundKey,
+  BoardMenuView,
+  BoardWorkspaceProps,
+  DueDateFilter,
+  SwitchBoardItem,
+} from "@/types/board-workspace";
+import { ArchivedItemsDialog } from "./workspace/ArchivedItemsDialog";
+import { SwitchBoardsDialog } from "./workspace/SwitchBoardsDialog";
 import { KanbanBoard } from "./KanbanBoard";
-
-type WorkspaceLabel = {
-  id: string;
-  title: string;
-  color: string;
-};
-
-type WorkspaceMember = {
-  id: string;
-  role: string;
-  member: {
-    id: string;
-    name: string;
-    email: string;
-    avatarUrl: string | null;
-  };
-};
-
-type WorkspaceCard = {
-  id: string;
-  listId: string;
-  title: string;
-  description: string | null;
-  position: number;
-  dueDate: string | Date | null;
-  isArchived: boolean;
-  coverColor: string | null;
-  labels: Array<{
-    id: string;
-    label: WorkspaceLabel;
-  }>;
-  members: Array<{
-    id: string;
-    member: WorkspaceMember["member"];
-  }>;
-  _count: {
-    checklistItems: number;
-    comments: number;
-  };
-  checklistDone?: number;
-};
-
-type WorkspaceList = {
-  id: string;
-  boardId: string;
-  title: string;
-  position: number;
-  cards: WorkspaceCard[];
-};
-
-type WorkspaceBoard = {
-  id: string;
-  title: string;
-  backgroundColor: string;
-  labels: WorkspaceLabel[];
-  members: WorkspaceMember[];
-  lists: WorkspaceList[];
-};
-
-type SwitchBoardItem = {
-  id: string;
-  title: string;
-  backgroundColor: string;
-  _count?: {
-    lists?: number;
-    members?: number;
-  };
-};
-
-type ArchivedListItem = {
-  id: string;
-  title: string;
-  updatedAt: string;
-  cardsCount: number;
-};
-
-type ArchivedCardItem = {
-  id: string;
-  title: string;
-  updatedAt: string;
-  listId: string;
-  listTitle: string;
-  commentsCount: number;
-};
-
-type ArchivedItemsTab = "lists" | "cards";
-
-type BoardMenuView = "menu" | "change-background" | "colors";
-
-type BoardBackgroundKey =
-  | "ocean"
-  | "sunset"
-  | "forest"
-  | "lavender"
-  | "midnight"
-  | "sky"
-  | "berry"
-  | "slate"
-  | "snow";
-
-type BoardBackgroundOption = {
-  key: BoardBackgroundKey;
-  emoji: string;
-  label: string;
-};
-
-interface BoardWorkspaceProps {
-  board: WorkspaceBoard;
-}
-
-type DueDateFilter = "all" | "overdue" | "today" | "week" | "none";
-
-const RAIL_MIN_WIDTH = 240;
-const RAIL_MAX_WIDTH = 420;
-
-const BOARD_PREVIEW_GRADIENTS: Record<string, string> = {
-  ocean: "linear-gradient(135deg, #0079bf, #00629d)",
-  sunset: "linear-gradient(135deg, #eb5a46, #ff9f1a)",
-  forest: "linear-gradient(135deg, #61bd4f, #0a8043)",
-  lavender: "linear-gradient(135deg, #c377e0, #7c5cbf)",
-  midnight: "linear-gradient(135deg, #344563, #091e42)",
-  sky: "linear-gradient(135deg, #00c2e0, #0079bf)",
-  berry: "linear-gradient(135deg, #ff78cb, #c377e0)",
-  slate: "linear-gradient(135deg, #838c91, #505f79)",
-  snow: "linear-gradient(135deg, #f8f9fd, #e1e2e6)",
-};
-
-const BOARD_CANVAS_GRADIENTS: Record<BoardBackgroundKey, string> = {
-  ocean: "linear-gradient(180deg, #5a437f 0%, #754992 52%, #965687 100%)",
-  sunset: "linear-gradient(180deg, #5b3b31 0%, #824b4a 52%, #9e5f72 100%)",
-  forest: "linear-gradient(180deg, #1f4f47 0%, #2d5f58 52%, #4a6d64 100%)",
-  lavender:
-    "linear-gradient(180deg, #67458d 0%, #7d4e99 48%, #96568c 100%)",
-  midnight:
-    "linear-gradient(180deg, #253252 0%, #354565 52%, #4d5d78 100%)",
-  sky: "linear-gradient(180deg, #204a67 0%, #355f84 52%, #536b98 100%)",
-  berry: "linear-gradient(180deg, #693760 0%, #874b77 52%, #a76184 100%)",
-  slate: "linear-gradient(180deg, #38434e 0%, #495565 52%, #5e6278 100%)",
-  snow: "linear-gradient(180deg, #40465a 0%, #525a72 52%, #6e6784 100%)",
-};
-
-const BOARD_BACKGROUND_OPTIONS: BoardBackgroundOption[] = [
-  { key: "midnight", emoji: "🪐", label: "Midnight" },
-  { key: "sky", emoji: "❄️", label: "Sky" },
-  { key: "ocean", emoji: "🌊", label: "Ocean" },
-  { key: "berry", emoji: "🔮", label: "Berry" },
-  { key: "lavender", emoji: "🌈", label: "Lavender" },
-  { key: "sunset", emoji: "🍑", label: "Sunset" },
-  { key: "snow", emoji: "🌸", label: "Snow" },
-  { key: "forest", emoji: "🌍", label: "Forest" },
-  { key: "slate", emoji: "👽", label: "Slate" },
-];
-
-const resolveBoardBackgroundGradient = (backgroundColor: string) => {
-  const key = backgroundColor as BoardBackgroundKey;
-  return BOARD_CANVAS_GRADIENTS[key] ?? BOARD_CANVAS_GRADIENTS.ocean;
-};
 
 export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   const router = useRouter();
@@ -258,22 +126,8 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
       setBoardsError(null);
 
       try {
-        const response = await fetch("/api/boards", {
-          signal: controller.signal,
-          cache: "no-store",
-        });
-
-        const payload = (await response.json()) as {
-          success?: boolean;
-          data?: SwitchBoardItem[];
-          error?: string;
-        };
-
-        if (!response.ok || !payload.success || !Array.isArray(payload.data)) {
-          throw new Error(payload.error ?? "Failed to load boards");
-        }
-
-        setAvailableBoards(payload.data);
+        const boards = await fetchSwitchBoards(controller.signal);
+        setAvailableBoards(boards);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
@@ -336,37 +190,15 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
       setArchivedItemsError(null);
 
       try {
-        const query = new URLSearchParams();
-        query.set("type", archivedItemsTab);
+        const result = await fetchArchivedItems({
+          boardId: board.id,
+          tab: archivedItemsTab,
+          search: archivedSearch,
+          signal: controller.signal,
+        });
 
-        const trimmedQuery = archivedSearch.trim();
-        if (trimmedQuery) {
-          query.set("q", trimmedQuery);
-        }
-
-        const response = await fetch(
-          `/api/boards/${board.id}/archived?${query.toString()}`,
-          {
-            signal: controller.signal,
-            cache: "no-store",
-          },
-        );
-
-        const payload = (await response.json()) as {
-          success?: boolean;
-          data?: {
-            lists?: ArchivedListItem[];
-            cards?: ArchivedCardItem[];
-          };
-          error?: string;
-        };
-
-        if (!response.ok || !payload.success) {
-          throw new Error(payload.error ?? "Failed to load archived items");
-        }
-
-        setArchivedLists(payload.data?.lists ?? []);
-        setArchivedCards(payload.data?.cards ?? []);
+        setArchivedLists(result.lists);
+        setArchivedCards(result.cards);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
@@ -434,72 +266,27 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     [activeBoardBackground],
   );
 
-  const filteredLists = useMemo(() => {
-    const now = new Date();
-    const weekFromNow = new Date(now);
-    weekFromNow.setDate(weekFromNow.getDate() + 7);
-
-    const normalizedQuery = deferredQuery.trim().toLowerCase();
-
-    return board.lists
-      .map((list) => ({
-        ...list,
-        cards: list.cards.filter((card) => {
-          const matchesQuery = normalizedQuery
-            ? card.title.toLowerCase().includes(normalizedQuery)
-            : true;
-
-          const matchesLabels =
-            selectedLabelIds.length === 0
-              ? true
-              : selectedLabelIds.every((labelId) =>
-                  card.labels.some((entry) => entry.label.id === labelId),
-                );
-
-          const matchesMembers =
-            selectedMemberIds.length === 0
-              ? true
-              : selectedMemberIds.every((memberId) =>
-                  card.members.some((entry) => entry.member.id === memberId),
-                );
-
-          const dueDate = card.dueDate ? new Date(card.dueDate) : null;
-          const matchesDueDate =
-            dueDateFilter === "all" ||
-            (dueDateFilter === "none" && !dueDate) ||
-            (dueDateFilter === "overdue" &&
-              !!dueDate &&
-              isBefore(dueDate, now) &&
-              !isToday(dueDate)) ||
-            (dueDateFilter === "today" && !!dueDate && isToday(dueDate)) ||
-            (dueDateFilter === "week" &&
-              !!dueDate &&
-              (isToday(dueDate) ||
-                (isAfter(dueDate, now) && isBefore(dueDate, weekFromNow))));
-
-          return (
-            matchesQuery && matchesLabels && matchesMembers && matchesDueDate
-          );
-        }),
-      }))
-      .filter((list) => list.cards.length > 0);
-  }, [
-    board.lists,
-    deferredQuery,
-    dueDateFilter,
-    selectedLabelIds,
-    selectedMemberIds,
-  ]);
+  const filteredLists = useMemo(
+    () =>
+      filterBoardLists({
+        lists: board.lists,
+        query: deferredQuery,
+        selectedLabelIds,
+        selectedMemberIds,
+        dueDateFilter,
+      }),
+    [board.lists, deferredQuery, dueDateFilter, selectedLabelIds, selectedMemberIds],
+  );
 
   const totalMatches = useMemo(
     () => filteredLists.reduce((count, list) => count + list.cards.length, 0),
     [filteredLists],
   );
 
-  const filteredTrackWidth = useMemo(() => {
-    if (filteredLists.length === 0) return 0;
-    return 272 * filteredLists.length + 12 * (filteredLists.length - 1);
-  }, [filteredLists.length]);
+  const filteredTrackWidth = useMemo(
+    () => getFilteredTrackWidth(filteredLists.length),
+    [filteredLists.length],
+  );
 
   const hasActiveFilters =
     query.trim().length > 0 ||
@@ -507,11 +294,12 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     selectedMemberIds.length > 0 ||
     dueDateFilter !== "all";
 
-  const activeFilterCount =
-    (query.trim().length > 0 ? 1 : 0) +
-    selectedLabelIds.length +
-    selectedMemberIds.length +
-    (dueDateFilter !== "all" ? 1 : 0);
+  const activeFilterCount = getActiveFilterCount(
+    query,
+    selectedLabelIds,
+    selectedMemberIds,
+    dueDateFilter,
+  );
 
   const railCards = useMemo(
     () => board.lists.flatMap((list) => list.cards).slice(0, 6),
@@ -533,9 +321,10 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
 
   const toggleSelection = (
     id: string,
-    setSelectedIds: Dispatch<SetStateAction<string[]>>,
+    current: string[],
+    setSelectedIds: (ids: string[]) => void,
   ) => {
-    setSelectedIds((current) =>
+    setSelectedIds(
       current.includes(id)
         ? current.filter((value) => value !== id)
         : [...current, id],
@@ -599,18 +388,6 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     }
 
     router.push(`/b/${targetBoardId}`);
-  };
-
-  const requestArchivedAction = async (url: string, init?: RequestInit) => {
-    const response = await fetch(url, init);
-    const payload = (await response.json()) as {
-      success?: boolean;
-      error?: string;
-    };
-
-    if (!response.ok || !payload.success) {
-      throw new Error(payload.error ?? "Request failed");
-    }
   };
 
   const handleRestoreArchivedList = async (listId: string) => {
@@ -716,23 +493,8 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     setIsChangingBackground(true);
 
     try {
-      const response = await fetch(`/api/boards/${board.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ backgroundColor }),
-      });
-
-      const payload = (await response.json()) as {
-        success?: boolean;
-        data?: { backgroundColor?: string };
-        error?: string;
-      };
-
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.error ?? "Failed to update board background");
-      }
-
-      setActiveBoardBackground(payload.data?.backgroundColor ?? backgroundColor);
+      const nextBackground = await patchBoardBackground(board.id, backgroundColor);
+      setActiveBoardBackground(nextBackground);
     } catch (error) {
       setActiveBoardBackground(previous);
       setBackgroundChangeError(
@@ -923,7 +685,13 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                           <button
                             key={member.id}
                             type="button"
-                            onClick={() => toggleSelection(member.id, setSelectedMemberIds)}
+                            onClick={() =>
+                              toggleSelection(
+                                member.id,
+                                selectedMemberIds,
+                                setSelectedMemberIds,
+                              )
+                            }
                             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-white/8"
                           >
                             <span
@@ -952,12 +720,7 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                       Due date
                     </p>
                     <div className="mt-2 space-y-1.5">
-                      {[
-                        { value: "none", label: "No dates" },
-                        { value: "overdue", label: "Overdue" },
-                        { value: "today", label: "Due in the next day" },
-                        { value: "week", label: "Due in the next week" },
-                      ].map((option) => {
+                      {DUE_DATE_FILTER_OPTIONS.map((option) => {
                         const isSelected = dueDateFilter === option.value;
 
                         return (
@@ -1000,7 +763,13 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                           <button
                             key={label.id}
                             type="button"
-                            onClick={() => toggleSelection(label.id, setSelectedLabelIds)}
+                            onClick={() =>
+                              toggleSelection(
+                                label.id,
+                                selectedLabelIds,
+                                setSelectedLabelIds,
+                              )
+                            }
                             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-white/8"
                           >
                             <span
@@ -1455,305 +1224,51 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
         </div>
       </div>
 
-      <Dialog
+      <ArchivedItemsDialog
         isOpen={isArchivedItemsOpen}
         onClose={closeArchivedItemsDialog}
-        className="max-w-[760px] border border-white/10 bg-[#2b2e38] text-white"
-      >
-        <div className="px-6 pb-6 pt-4">
-          <div className="relative flex items-center justify-center">
-            <button
-              type="button"
-              onClick={closeArchivedItemsDialog}
-              className="absolute left-5 inline-flex h-8 w-8 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-              aria-label="Back"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-            <h3 className="text-lg font-semibold text-white/86">Archived items</h3>
-          </div>
+        tab={archivedItemsTab}
+        onTabChange={setArchivedItemsTab}
+        search={archivedSearch}
+        onSearchChange={setArchivedSearch}
+        itemsError={archivedItemsError}
+        actionError={archivedActionError}
+        isLoading={isArchivedItemsLoading}
+        archivedLists={archivedLists}
+        archivedCards={archivedCards}
+        actionKey={archivedActionKey}
+        onRestoreList={(listId) => {
+          void handleRestoreArchivedList(listId);
+        }}
+        onDeleteList={(listId) => {
+          void handleDeleteArchivedList(listId);
+        }}
+        onRestoreCard={(cardId) => {
+          void handleRestoreArchivedCard(cardId);
+        }}
+        onDeleteCard={(cardId) => {
+          void handleDeleteArchivedCard(cardId);
+        }}
+        onOpenCard={handleOpenArchivedCard}
+      />
 
-          <div className="mt-4 flex items-center gap-2">
-            <input
-              type="text"
-              value={archivedSearch}
-              onChange={(event) => setArchivedSearch(event.target.value)}
-              placeholder="Search"
-              className="h-10 flex-1 rounded-md border border-white/25 bg-[#272b35] px-3 text-sm text-white outline-none placeholder:text-white/50 focus:border-[#8fb8ff]"
-            />
-
-            <div className="rounded-md bg-white/7 p-1">
-              <button
-                type="button"
-                onClick={() => setArchivedItemsTab("lists")}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                  archivedItemsTab === "lists"
-                    ? "bg-white text-[#1f2328]"
-                    : "text-white/76 hover:bg-white/10 hover:text-white",
-                )}
-              >
-                Lists
-              </button>
-              <button
-                type="button"
-                onClick={() => setArchivedItemsTab("cards")}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                  archivedItemsTab === "cards"
-                    ? "bg-white text-[#1f2328]"
-                    : "text-white/76 hover:bg-white/10 hover:text-white",
-                )}
-              >
-                Cards
-              </button>
-            </div>
-          </div>
-
-          {archivedItemsError ? (
-            <p className="mt-3 text-sm text-[#ffb4b4]">{archivedItemsError}</p>
-          ) : null}
-
-          {archivedActionError ? (
-            <p className="mt-2 text-xs text-[#ffb4b4]">{archivedActionError}</p>
-          ) : null}
-
-          <div className="mt-4 max-h-[360px] overflow-y-auto rounded-lg border border-white/8 bg-black/10">
-            {isArchivedItemsLoading ? (
-              <div className="px-4 py-5 text-sm text-white/65">Loading archived items...</div>
-            ) : archivedItemsTab === "lists" ? (
-              archivedLists.length > 0 ? (
-                <div className="divide-y divide-white/10">
-                  {archivedLists.map((archivedList) => {
-                    const restoreKey = `restore-list:${archivedList.id}`;
-                    const deleteKey = `delete-list:${archivedList.id}`;
-
-                    return (
-                      <div
-                        key={archivedList.id}
-                        className="flex items-center justify-between gap-3 px-4 py-3"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-white/90">
-                            {archivedList.title}
-                          </p>
-                          <p className="text-xs text-white/55">
-                            {archivedList.cardsCount} cards · archived {format(new Date(archivedList.updatedAt), "MMM d")}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void handleRestoreArchivedList(archivedList.id);
-                            }}
-                            disabled={archivedActionKey === restoreKey}
-                            className="inline-flex h-8 items-center gap-1 rounded-md bg-white/8 px-3 text-sm font-medium text-white/86 transition-colors hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-65"
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            Restore
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void handleDeleteArchivedList(archivedList.id);
-                            }}
-                            disabled={archivedActionKey === deleteKey}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/8 text-white/86 transition-colors hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-65"
-                            aria-label="Delete archived list"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="px-4 py-5 text-sm text-white/65">No archived lists found.</div>
-              )
-            ) : archivedCards.length > 0 ? (
-              <div className="divide-y divide-white/10">
-                {archivedCards.map((archivedCard) => {
-                  const restoreKey = `restore-card:${archivedCard.id}`;
-                  const deleteKey = `delete-card:${archivedCard.id}`;
-
-                  return (
-                    <div
-                      key={archivedCard.id}
-                      className="flex items-center justify-between gap-3 px-4 py-3"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => handleOpenArchivedCard(archivedCard.id)}
-                        className="min-w-0 text-left"
-                      >
-                        <p className="truncate text-sm font-medium text-white/90 hover:text-white">
-                          {archivedCard.title}
-                        </p>
-                        <p className="text-xs text-white/55">
-                          {archivedCard.listTitle} · {archivedCard.commentsCount} comments · archived {format(new Date(archivedCard.updatedAt), "MMM d")}
-                        </p>
-                      </button>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void handleRestoreArchivedCard(archivedCard.id);
-                          }}
-                          disabled={archivedActionKey === restoreKey}
-                          className="inline-flex h-8 items-center gap-1 rounded-md bg-white/8 px-3 text-sm font-medium text-white/86 transition-colors hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-65"
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" />
-                          Restore
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void handleDeleteArchivedCard(archivedCard.id);
-                          }}
-                          disabled={archivedActionKey === deleteKey}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/8 text-white/86 transition-colors hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-65"
-                          aria-label="Delete archived card"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="px-4 py-5 text-sm text-white/65">No archived cards found.</div>
-            )}
-          </div>
-        </div>
-      </Dialog>
-
-      <Dialog
+      <SwitchBoardsDialog
         isOpen={isSwitchBoardsOpen}
         onClose={() => setIsSwitchBoardsOpen(false)}
-        className="max-w-[640px] border border-white/10 bg-[#2b2e38] text-white max-sm:min-h-[calc(100vh-60px)] max-sm:max-w-none max-sm:rounded-none max-sm:border-x-0 max-sm:border-b-0"
-      >
-        <div className="px-4 pb-20 pt-4 sm:px-6 sm:pb-6 sm:pt-10">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/55" />
-              <input
-                type="text"
-                value={boardSearch}
-                onChange={(event) => setBoardSearch(event.target.value)}
-                placeholder="Search your boards"
-                className="h-10 w-full rounded-md border border-[#6ba4ff] bg-[#242833] pl-9 pr-3 text-sm text-white outline-none placeholder:text-white/50 focus:border-[#8ab6ff]"
-              />
-            </div>
-
-            <button
-              type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-white/8 text-white/70 transition-colors hover:bg-white/14 hover:text-white"
-              aria-label="List view"
-            >
-              <ListFilter className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-white/8 text-white/70 transition-colors hover:bg-white/14 hover:text-white"
-              aria-label="Pinned boards"
-            >
-              <Pin className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="mt-4 flex items-center gap-2">
-            <span className="rounded-md border border-[#6ba4ff] bg-[#0c66e4]/22 px-2.5 py-1 text-sm font-medium text-[#8ab6ff]">
-              All
-            </span>
-            <span className="rounded-md bg-white/8 px-2.5 py-1 text-sm font-medium text-white/82">
-              Trello Workspace
-            </span>
-          </div>
-
-          <div className="mt-6">
-            <p className="mb-3 text-sm font-semibold text-white/76">Recent</p>
-
-            {boardsLoading ? (
-              <p className="text-sm text-white/58">Loading boards...</p>
-            ) : boardsError ? (
-              <p className="text-sm text-[#ff9f9f]">{boardsError}</p>
-            ) : recentBoards.length === 0 ? (
-              <p className="text-sm text-white/58">No boards found.</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {recentBoards.map((boardItem) => (
-                  <button
-                    key={boardItem.id}
-                    type="button"
-                    onClick={() => handleSwitchBoard(boardItem.id)}
-                    className={cn(
-                      "overflow-hidden rounded-lg border border-white/10 text-left transition-all hover:border-white/30",
-                      boardItem.id === board.id && "border-[#6ba4ff]",
-                    )}
-                  >
-                    <div
-                      className="h-16 w-full"
-                      style={{
-                        background:
-                          BOARD_PREVIEW_GRADIENTS[boardItem.backgroundColor] ??
-                          BOARD_PREVIEW_GRADIENTS.ocean,
-                      }}
-                    />
-                    <div className="bg-black/28 px-3 py-2">
-                      <p className="truncate text-sm font-medium text-white">
-                        {boardItem.title}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="mt-6 border-t border-white/10 pt-4">
-            <button
-              type="button"
-              onClick={() => setIsWorkspaceExpanded((current) => !current)}
-              className="inline-flex items-center gap-2 text-left text-lg font-semibold text-white/84 transition-colors hover:text-white"
-            >
-              {isWorkspaceExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-              Trello Workspace
-            </button>
-
-            {isWorkspaceExpanded ? (
-              <div className="mt-3 max-h-56 space-y-1 overflow-y-auto pr-1">
-                {filteredBoards.map((boardItem) => (
-                  <button
-                    key={`${boardItem.id}-row`}
-                    type="button"
-                    onClick={() => handleSwitchBoard(boardItem.id)}
-                    className={cn(
-                      "flex w-full items-center justify-between rounded-md px-2 py-2 text-left transition-colors hover:bg-white/8",
-                      boardItem.id === board.id && "bg-[#0c66e4]/20 text-[#9ac2ff]",
-                    )}
-                  >
-                    <span className="truncate text-sm font-medium">
-                      {boardItem.title}
-                    </span>
-                    <span className="text-xs text-white/56">
-                      {boardItem._count?.lists ?? 0} lists
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </Dialog>
+        boardSearch={boardSearch}
+        onBoardSearchChange={setBoardSearch}
+        boardsLoading={boardsLoading}
+        boardsError={boardsError}
+        recentBoards={recentBoards}
+        filteredBoards={filteredBoards}
+        currentBoardId={board.id}
+        isWorkspaceExpanded={isWorkspaceExpanded}
+        onToggleWorkspaceExpanded={() =>
+          setIsWorkspaceExpanded((current) => !current)
+        }
+        onSwitchBoard={handleSwitchBoard}
+        previewGradients={BOARD_PREVIEW_GRADIENTS}
+      />
     </div>
   );
 }

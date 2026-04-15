@@ -125,3 +125,37 @@ export interface MoveCardPayload {
   targetListId: string;
   position: number;
 }
+
+// ui module types
+export type { KanbanCardData } from "./kanban-card";
+export type {
+  BoardCard,
+  BoardList,
+  BoardState,
+  KanbanBoardProps,
+} from "./kanban-board";
+export type {
+  ListColorKey,
+  ListTone,
+  ListColumnData,
+  ListColumnProps,
+  MoveBoardSummary,
+  MoveListSummary,
+} from "./list-column";
+export type {
+  WorkspaceLabel,
+  WorkspaceMember,
+  WorkspaceCard,
+  WorkspaceList,
+  WorkspaceBoard,
+  SwitchBoardItem,
+  ArchivedListItem,
+  ArchivedCardItem,
+  ArchivedItemsTab,
+  BoardMenuView,
+  BoardBackgroundKey,
+  BoardBackgroundOption,
+  BoardWorkspaceProps,
+  DueDateFilter,
+} from "./board-workspace";
+export type { CardModalState } from "./card-modal";

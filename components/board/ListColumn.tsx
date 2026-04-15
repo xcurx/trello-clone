@@ -9,141 +9,31 @@ import { CSS } from "@dnd-kit/utilities";
 import { Check, ChevronUp, MoreHorizontal, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  archiveAllCardsInList,
+  archiveList,
+  createCardInList,
+  fetchBoardOptions,
+  fetchListsForBoard,
+  moveAllCardsInList,
+  moveList,
+  patchListColor as patchListColorRequest,
+  patchListTitle,
+} from "@/components/board/list-column/api";
+import {
+  LIST_COLOR_OPTIONS,
+  resolveListTone,
+} from "@/components/board/list-column/constants";
 import { Dialog } from "@/components/ui/Dialog";
 import { EditableText } from "@/components/ui/EditableText";
 import { Popover } from "@/components/ui/Popover";
 import { cn } from "@/lib/utils";
-import { KanbanCard, type KanbanCardData } from "../card/KanbanCard";
-
-type MoveBoardSummary = {
-  id: string;
-  title: string;
-};
-
-type MoveListSummary = {
-  id: string;
-  boardId: string;
-  title: string;
-  position: number;
-  cardsCount: number;
-};
-
-type ListColorKey =
-  | "green"
-  | "yellow"
-  | "orange"
-  | "red"
-  | "purple"
-  | "blue"
-  | "teal"
-  | "lime"
-  | "pink"
-  | "gray";
-
-type ListTone = {
-  shell: string;
-  header: string;
-};
-
-interface ListColumnProps {
-  list: {
-    id: string;
-    boardId: string;
-    title: string;
-    position: number;
-    color?: string | null;
-    cards: KanbanCardData[];
-  };
-  onRequestCopyList?: (listId: string, title: string) => void;
-  onListPatched?: (
-    listId: string,
-    patch: { title?: string; color?: string | null; isArchived?: boolean },
-  ) => void;
-  isOverlay?: boolean;
-}
-
-const DEFAULT_LIST_TONES: ListTone[] = [
-  {
-    shell: "bg-[#5d4b83]/95",
-    header: "text-white/92",
-  },
-  {
-    shell: "bg-[#6a5718]/95",
-    header: "text-[#ffe9a3]",
-  },
-  {
-    shell: "bg-[#2a6b5f]/95",
-    header: "text-[#d0f6eb]",
-  },
-  {
-    shell: "bg-[#1f2329]/95",
-    header: "text-white/90",
-  },
-];
-
-const LIST_COLOR_TONES: Record<ListColorKey, ListTone> = {
-  green: {
-    shell: "bg-[#2a6b5f]/95",
-    header: "text-[#d0f6eb]",
-  },
-  yellow: {
-    shell: "bg-[#6a5718]/95",
-    header: "text-[#ffe9a3]",
-  },
-  orange: {
-    shell: "bg-[#7a4a12]/95",
-    header: "text-[#ffe0b2]",
-  },
-  red: {
-    shell: "bg-[#6e2d2c]/95",
-    header: "text-[#ffd1cc]",
-  },
-  purple: {
-    shell: "bg-[#5d4b83]/95",
-    header: "text-white/92",
-  },
-  blue: {
-    shell: "bg-[#2a4f7c]/95",
-    header: "text-[#d8e7ff]",
-  },
-  teal: {
-    shell: "bg-[#245f73]/95",
-    header: "text-[#d6f1fb]",
-  },
-  lime: {
-    shell: "bg-[#4c6720]/95",
-    header: "text-[#ecffcb]",
-  },
-  pink: {
-    shell: "bg-[#6a3a64]/95",
-    header: "text-[#ffd9f7]",
-  },
-  gray: {
-    shell: "bg-[#3a414b]/95",
-    header: "text-[#edf2f8]",
-  },
-};
-
-const LIST_COLOR_OPTIONS: Array<{ key: ListColorKey; swatchClass: string }> = [
-  { key: "green", swatchClass: "bg-[#1d8c6f]" },
-  { key: "yellow", swatchClass: "bg-[#8b6f05]" },
-  { key: "orange", swatchClass: "bg-[#b35f00]" },
-  { key: "red", swatchClass: "bg-[#bf3b2f]" },
-  { key: "purple", swatchClass: "bg-[#7d43a1]" },
-  { key: "blue", swatchClass: "bg-[#2563d4]" },
-  { key: "teal", swatchClass: "bg-[#2c86a4]" },
-  { key: "lime", swatchClass: "bg-[#5b8a2a]" },
-  { key: "pink", swatchClass: "bg-[#a44f88]" },
-  { key: "gray", swatchClass: "bg-[#7c8088]" },
-];
-
-const resolveListTone = (color: string | null | undefined, position: number) => {
-  if (color && color in LIST_COLOR_TONES) {
-    return LIST_COLOR_TONES[color as ListColorKey];
-  }
-
-  return DEFAULT_LIST_TONES[position % DEFAULT_LIST_TONES.length];
-};
+import type {
+  ListColumnProps,
+  MoveBoardSummary,
+  MoveListSummary,
+} from "@/types/list-column";
+import { KanbanCard } from "../card/KanbanCard";
 
 export function ListColumn({
   list,
@@ -251,47 +141,16 @@ function SortableListColumn({
   const getMessage = (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback;
 
-  const loadBoardOptions = async () => {
+  const loadBoardOptionsForDialogs = async () => {
     setIsLoadingBoardOptions(true);
 
     try {
-      const response = await fetch("/api/boards", {
-        cache: "no-store",
-      });
-
-      const payload = (await response.json()) as {
-        success?: boolean;
-        data?: Array<{ id: string; title: string }>;
-        error?: string;
-      };
-
-      if (!response.ok || !payload.success || !Array.isArray(payload.data)) {
-        throw new Error(payload.error ?? "Failed to load boards");
-      }
-
-      setBoardOptions(payload.data);
-      return payload.data;
+      const options = await fetchBoardOptions();
+      setBoardOptions(options);
+      return options;
     } finally {
       setIsLoadingBoardOptions(false);
     }
-  };
-
-  const loadListsForBoard = async (boardId: string) => {
-    const response = await fetch(`/api/boards/${boardId}/lists`, {
-      cache: "no-store",
-    });
-
-    const payload = (await response.json()) as {
-      success?: boolean;
-      data?: MoveListSummary[];
-      error?: string;
-    };
-
-    if (!response.ok || !payload.success || !Array.isArray(payload.data)) {
-      throw new Error(payload.error ?? "Failed to load lists");
-    }
-
-    return payload.data;
   };
 
   const openMoveListDialog = async () => {
@@ -302,9 +161,9 @@ function SortableListColumn({
     setSelectedMovePosition(list.position + 1);
 
     try {
-      await loadBoardOptions();
+      await loadBoardOptionsForDialogs();
       setIsLoadingMoveListLists(true);
-      const lists = await loadListsForBoard(list.boardId);
+      const lists = await fetchListsForBoard(list.boardId);
       setMoveListBoardLists(lists);
     } catch (error) {
       setMoveListError(getMessage(error, "Failed to load move options"));
@@ -321,9 +180,9 @@ function SortableListColumn({
     setSelectedCardsPosition(1);
 
     try {
-      await loadBoardOptions();
+      await loadBoardOptionsForDialogs();
       setIsLoadingMoveCardsLists(true);
-      const lists = await loadListsForBoard(list.boardId);
+      const lists = await fetchListsForBoard(list.boardId);
       setMoveCardsBoardLists(lists);
 
       const firstTarget = lists.find((entry) => entry.id !== list.id);
@@ -341,7 +200,7 @@ function SortableListColumn({
     setIsLoadingMoveListLists(true);
 
     try {
-      const lists = await loadListsForBoard(nextBoardId);
+      const lists = await fetchListsForBoard(nextBoardId);
       setMoveListBoardLists(lists);
 
       const insertionBaseCount =
@@ -369,7 +228,7 @@ function SortableListColumn({
     setIsLoadingMoveCardsLists(true);
 
     try {
-      const lists = await loadListsForBoard(nextBoardId);
+      const lists = await fetchListsForBoard(nextBoardId);
       setMoveCardsBoardLists(lists);
 
       const firstTarget = lists.find((entry) => entry.id !== list.id);
@@ -387,23 +246,7 @@ function SortableListColumn({
     setIsMovingList(true);
 
     try {
-      const response = await fetch(`/api/lists/${list.id}/move`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          targetBoardId: selectedMoveBoardId,
-          position: selectedMovePosition - 1,
-        }),
-      });
-
-      const payload = (await response.json()) as {
-        success?: boolean;
-        error?: string;
-      };
-
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.error ?? "Failed to move list");
-      }
+      await moveList(list.id, selectedMoveBoardId, selectedMovePosition - 1);
 
       setIsMoveListOpen(false);
       router.refresh();
@@ -424,24 +267,12 @@ function SortableListColumn({
     setIsMovingCards(true);
 
     try {
-      const response = await fetch(`/api/lists/${list.id}/move-cards`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          targetBoardId: selectedCardsBoardId,
-          targetListId: selectedTargetListId,
-          position: selectedCardsPosition - 1,
-        }),
-      });
-
-      const payload = (await response.json()) as {
-        success?: boolean;
-        error?: string;
-      };
-
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.error ?? "Failed to move cards");
-      }
+      await moveAllCardsInList(
+        list.id,
+        selectedCardsBoardId,
+        selectedTargetListId,
+        selectedCardsPosition - 1,
+      );
 
       setIsMoveAllCardsOpen(false);
       router.refresh();
@@ -457,18 +288,7 @@ function SortableListColumn({
     setIsArchivingList(true);
 
     try {
-      const response = await fetch(`/api/lists/${list.id}/archive`, {
-        method: "PATCH",
-      });
-
-      const payload = (await response.json()) as {
-        success?: boolean;
-        error?: string;
-      };
-
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.error ?? "Failed to archive list");
-      }
+      await archiveList(list.id);
 
       onListPatched?.(list.id, { isArchived: true });
       setListActionsMenuVersion((value) => value + 1);
@@ -485,18 +305,7 @@ function SortableListColumn({
     setIsArchivingCards(true);
 
     try {
-      const response = await fetch(`/api/lists/${list.id}/archive-cards`, {
-        method: "PATCH",
-      });
-
-      const payload = (await response.json()) as {
-        success?: boolean;
-        error?: string;
-      };
-
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.error ?? "Failed to archive cards");
-      }
+      await archiveAllCardsInList(list.id);
 
       setListActionsMenuVersion((value) => value + 1);
       router.refresh();
@@ -532,20 +341,9 @@ function SortableListColumn({
     const title = newCardTitle.trim();
 
     try {
-      const response = await fetch("/api/cards", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          listId: list.id,
-          position: list.cards.length * 1024,
-        }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        list.cards.push(data.data);
-        router.refresh();
-      }
+      const newCard = await createCardInList(list.id, title, list.cards.length * 1024);
+      list.cards.push(newCard);
+      router.refresh();
     } catch (error) {
       console.error(error);
     }
@@ -565,11 +363,7 @@ function SortableListColumn({
     onListPatched?.(list.id, { color });
 
     try {
-      await fetch(`/api/lists/${list.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ color }),
-      });
+      await patchListColorRequest(list.id, color);
       list.color = color;
     } catch (error) {
       console.error(error);
@@ -629,11 +423,7 @@ function SortableListColumn({
         <EditableText
           value={list.title}
           onChange={(newValue) => {
-            fetch(`/api/lists/${list.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ title: newValue }),
-            }).catch(console.error);
+            patchListTitle(list.id, newValue).catch(console.error);
             list.title = newValue;
             onListPatched?.(list.id, { title: newValue });
           }}

@@ -1,6 +1,6 @@
 "use client";
 
-import { format, formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import {
   AlignLeft,
   Archive,
@@ -19,50 +19,28 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import {
+  addCardLabel,
+  addCardMember,
+  createCardComment,
+  createChecklistItem,
+  deleteChecklistItem,
+  loadCardModalData,
+  patchCardDetails,
+  patchChecklistItem,
+  removeCardLabel,
+  removeCardMember,
+} from "@/components/card/card-modal/api";
+import {
+  toDateTimeLocalValue,
+} from "@/components/card/card-modal/utils";
+import { ActivitySidebar } from "@/components/card/card-modal/ActivitySidebar";
 import { Avatar } from "@/components/ui/Avatar";
 import { Dialog } from "@/components/ui/Dialog";
 import { EditableText } from "@/components/ui/EditableText";
 import { Popover } from "@/components/ui/Popover";
-import type {
-  ApiResponse,
-  CardDetail,
-  CommentData,
-  LabelData,
-  MemberData,
-} from "@/types";
-
-type CardModalState = CardDetail & {
-  list: {
-    id: string;
-    title: string;
-    boardId: string;
-  };
-};
-
-async function fetchJson<T>(input: RequestInfo, init?: RequestInit) {
-  const response = await fetch(input, init);
-  const body = (await response.json()) as ApiResponse<T>;
-
-  if (!response.ok || !body.success) {
-    throw new Error(body.success ? "Request failed" : body.error);
-  }
-
-  return body.data;
-}
-
-function toDateTimeLocalValue(value: string | null | undefined) {
-  if (!value) return "";
-
-  const date = new Date(value);
-  const timezoneOffset = date.getTimezoneOffset() * 60_000;
-  const localDate = new Date(date.getTime() - timezoneOffset);
-  return localDate.toISOString().slice(0, 16);
-}
-
-function toRelativeActivityTime(value: string) {
-  const result = formatDistanceToNow(new Date(value), { addSuffix: true });
-  return result === "less than a minute ago" ? "just now" : result;
-}
+import type { CardDetail, LabelData, MemberData } from "@/types";
+import type { CardModalState } from "@/types/card-modal";
 
 export function CardModal() {
   const searchParams = useSearchParams();
@@ -98,17 +76,10 @@ export function CardModal() {
       setLoading(true);
 
       try {
-        const nextCard = await fetchJson<CardModalState>(
-          `/api/cards/${cardId}`,
-        );
+        const { card: nextCard, labels, members } = await loadCardModalData(cardId);
         setCard(nextCard);
         setDescValue(nextCard.description ?? "");
         setDueDateValue(toDateTimeLocalValue(nextCard.dueDate));
-
-        const [labels, members] = await Promise.all([
-          fetchJson<LabelData[]>(`/api/boards/${nextCard.list.boardId}/labels`),
-          fetchJson<MemberData[]>("/api/members"),
-        ]);
 
         setBoardLabels(labels);
         setAllMembers(members);
@@ -173,11 +144,7 @@ export function CardModal() {
   const saveCardPatch = async (patch: Partial<CardDetail>) => {
     if (!card) return;
 
-    const updatedCard = await fetchJson<CardDetail>(`/api/cards/${card.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
+    const updatedCard = await patchCardDetails(card.id, patch);
 
     setCard((current) =>
       current
@@ -201,10 +168,7 @@ export function CardModal() {
     const isAssigned = selectedMemberIds.has(member.id);
 
     if (isAssigned) {
-      await fetchJson<{ removed: true }>(
-        `/api/cards/${card.id}/members/${member.id}`,
-        { method: "DELETE" },
-      );
+      await removeCardMember(card.id, member.id);
 
       setCard((current) =>
         current
@@ -217,14 +181,7 @@ export function CardModal() {
           : current,
       );
     } else {
-      const createdMember = await fetchJson<{
-        id: string;
-        member: MemberData;
-      }>(`/api/cards/${card.id}/members`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberId: member.id }),
-      });
+      const createdMember = await addCardMember(card.id, member.id);
 
       setCard((current) =>
         current
@@ -245,12 +202,7 @@ export function CardModal() {
     const isSelected = selectedLabelIds.has(label.id);
 
     if (isSelected) {
-      await fetchJson<{ removed: true }>(
-        `/api/cards/${card.id}/labels/${label.id}`,
-        {
-          method: "DELETE",
-        },
-      );
+      await removeCardLabel(card.id, label.id);
 
       setCard((current) =>
         current
@@ -263,14 +215,7 @@ export function CardModal() {
           : current,
       );
     } else {
-      const createdLabel = await fetchJson<{
-        id: string;
-        label: LabelData;
-      }>(`/api/cards/${card.id}/labels`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ labelId: label.id }),
-      });
+      const createdLabel = await addCardLabel(card.id, label.id);
 
       setCard((current) =>
         current
@@ -288,17 +233,7 @@ export function CardModal() {
   const handleAddChecklistItem = async () => {
     if (!card || !newChecklistTitle.trim()) return;
 
-    const item = await fetchJson<{
-      id: string;
-      cardId: string;
-      title: string;
-      isCompleted: boolean;
-      position: number;
-    }>(`/api/cards/${card.id}/checklist`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: newChecklistTitle.trim() }),
-    });
+    const item = await createChecklistItem(card.id, newChecklistTitle.trim());
 
     setCard((current) =>
       current
@@ -318,17 +253,7 @@ export function CardModal() {
     itemId: string,
     isCompleted: boolean,
   ) => {
-    const updatedItem = await fetchJson<{
-      id: string;
-      cardId: string;
-      title: string;
-      isCompleted: boolean;
-      position: number;
-    }>(`/api/checklist/${itemId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isCompleted }),
-    });
+    const updatedItem = await patchChecklistItem(itemId, isCompleted);
 
     setCard((current) =>
       current
@@ -344,9 +269,7 @@ export function CardModal() {
   };
 
   const handleDeleteChecklistItem = async (itemId: string) => {
-    await fetchJson<{ deleted: true }>(`/api/checklist/${itemId}`, {
-      method: "DELETE",
-    });
+    await deleteChecklistItem(itemId);
 
     setCard((current) =>
       current
@@ -371,14 +294,7 @@ export function CardModal() {
   const handleAddComment = async () => {
     if (!card || !newComment.trim()) return;
 
-    const createdComment = await fetchJson<CommentData>(
-      `/api/cards/${card.id}/comments`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: newComment.trim() }),
-      },
-    );
+    const createdComment = await createCardComment(card.id, newComment.trim());
 
     setCard((current) =>
       current
@@ -840,98 +756,14 @@ export function CardModal() {
                 ) : null}
               </div>
 
-              <aside className="border-t border-white/10 bg-[#1f2229]/70 px-5 pb-6 pt-5 lg:border-l lg:border-t-0">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 text-white/82" />
-                    <h3 className="text-[20px] font-semibold text-white/88">
-                      Comments and activity
-                    </h3>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="rounded-md bg-white/8 px-3 py-1.5 text-sm font-medium text-white/88 transition-colors hover:bg-white/12"
-                  >
-                    Show details
-                  </button>
-                </div>
-
-                <div className="mb-4">
-                  <input
-                    type="text"
-                    className="h-10 w-full rounded-md bg-[#2d313b] px-3 text-sm text-white outline-none transition-colors placeholder:text-white/48 focus:bg-[#353a45]"
-                    placeholder="Write a comment..."
-                    value={newComment}
-                    onChange={(event) => setNewComment(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        handleAddComment().catch(console.error);
-                      }
-                    }}
-                  />
-                </div>
-
-                <div className="space-y-4 overflow-y-auto pr-1">
-                  {card.comments.map((comment) => (
-                    <div key={comment.id} className="flex gap-3">
-                      <Avatar
-                        src={comment.member.avatarUrl}
-                        name={comment.member.name}
-                        size="sm"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-white/92">
-                            {comment.member.name}
-                          </span>
-                          <span
-                            title={format(
-                              new Date(comment.createdAt),
-                              "MMM d, yyyy 'at' h:mm a",
-                            )}
-                            className="cursor-default text-xs text-[#8fb6ff] underline"
-                          >
-                            {toRelativeActivityTime(comment.createdAt)}
-                          </span>
-                        </div>
-                        <div className="mt-1 rounded-md bg-[#2d313b] px-3 py-2 text-sm text-white/88">
-                          {comment.content}
-                        </div>
-                        <div className="mt-1 flex items-center gap-2 text-xs text-white/58">
-                          <span className="underline">Edit</span>
-                          <span>|</span>
-                          <span className="underline">Delete</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="flex gap-3">
-                    <Avatar name="You" size="sm" />
-                    <div className="text-sm text-white/74">
-                      <span className="font-semibold text-white/90">You</span>{" "}
-                      added this card to {card.list.title}
-                      <span
-                        title={format(
-                          new Date(card.createdAt),
-                          "MMM d, yyyy 'at' h:mm a",
-                        )}
-                        className="block text-xs text-[#8fb6ff] underline"
-                      >
-                        {toRelativeActivityTime(card.createdAt)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {card.comments.length === 0 ? (
-                    <p className="text-sm text-white/55">
-                      No comments yet. Start the discussion above.
-                    </p>
-                  ) : null}
-                </div>
-              </aside>
+              <ActivitySidebar
+                card={card}
+                newComment={newComment}
+                onNewCommentChange={setNewComment}
+                onAddComment={() => {
+                  handleAddComment().catch(console.error);
+                }}
+              />
             </div>
 
             <div className="h-px w-full bg-white/10" />

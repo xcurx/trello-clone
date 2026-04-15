@@ -22,66 +22,19 @@ import {
 } from "@dnd-kit/sortable";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import {
+  createOrCopyList,
+  patchBoardTitle,
+  persistCardMove,
+  persistCardsReorder,
+} from "@/components/board/kanban-board/api";
 import { EditableText } from "@/components/ui/EditableText";
 import {
   reorderListsAction,
 } from "@/lib/actions/board.actions";
+import type { BoardCard, BoardList, KanbanBoardProps } from "@/types/kanban-board";
 import { KanbanCard } from "../card/KanbanCard";
 import { ListColumn } from "./ListColumn";
-
-type BoardCard = {
-  id: string;
-  listId: string;
-  title: string;
-  description: string | null;
-  position: number;
-  dueDate: Date | string | null;
-  isArchived: boolean;
-  coverColor: string | null;
-  labels: Array<{
-    id: string;
-    label: {
-      id: string;
-      title: string;
-      color: string;
-    };
-  }>;
-  members: Array<{
-    id: string;
-    member: {
-      id: string;
-      name: string;
-      avatarUrl: string | null;
-    };
-  }>;
-  _count: {
-    checklistItems: number;
-    comments: number;
-  };
-  checklistDone?: number;
-  checklistItems?: Array<{ id: string }>;
-};
-
-type BoardList = {
-  id: string;
-  boardId: string;
-  title: string;
-  color?: string | null;
-  position: number;
-  cards: BoardCard[];
-};
-
-type BoardState = {
-  id: string;
-  title: string;
-  backgroundColor: string;
-  lists: BoardList[];
-};
-
-interface KanbanBoardProps {
-  board: BoardState;
-  hideHeader?: boolean;
-}
 
 export function KanbanBoard({
   board: initialBoard,
@@ -107,40 +60,17 @@ export function KanbanBoard({
     const title = newListTitle.trim();
 
     try {
-      const res = copySourceListId
-        ? await fetch(`/api/lists/${copySourceListId}/copy`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title }),
-          })
-        : await fetch("/api/lists", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              title,
-              boardId: board.id,
-              position: board.lists.length * 1024,
-            }),
-          });
+      const nextList = await createOrCopyList({
+        boardId: board.id,
+        title,
+        position: board.lists.length * 1024,
+        copySourceListId,
+      });
 
-      const data = await res.json();
-
-      if (data.success) {
-        const nextList = {
-          ...data.data,
-          cards: (data.data.cards ?? []).map(
-            (card: BoardCard & { checklistItems?: Array<{ id: string }> }) => ({
-              ...card,
-              checklistDone: card.checklistDone ?? card.checklistItems?.length,
-            }),
-          ),
-        } as BoardList;
-
-        setBoard((current) => ({
-          ...current,
-          lists: [...current.lists, nextList],
-        }));
-      }
+      setBoard((current) => ({
+        ...current,
+        lists: [...current.lists, nextList],
+      }));
     } catch (e) {
       console.error(e);
     }
@@ -232,41 +162,6 @@ export function KanbanBoard({
     return closestCorners(args);
   };
 
-  const patchJson = async (url: string, payload: unknown) => {
-    const response = await fetch(url, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    let data: unknown = null;
-    try {
-      data = await response.json();
-    } catch {
-      data = null;
-    }
-
-    if (!response.ok) {
-      const message =
-        data && typeof data === "object" && "error" in data
-          ? String((data as { error?: unknown }).error)
-          : "Request failed";
-      throw new Error(message);
-    }
-  };
-
-  const persistCardsReorder = async (listId: string, orderedIds: string[]) => {
-    await patchJson("/api/cards/reorder", { listId, orderedIds });
-  };
-
-  const persistCardMove = async (
-    cardId: string,
-    targetListId: string,
-    position: number,
-  ) => {
-    await patchJson(`/api/cards/${cardId}/move`, { targetListId, position });
-  };
-
   if (!isMounted) {
     return <div className="flex-1 w-full bg-transparent" />; // Wait for client
   }
@@ -280,10 +175,7 @@ export function KanbanBoard({
             value={board.title}
             onChange={(newVal) => {
               setBoard({ ...board, title: newVal });
-              fetch(`/api/boards/${board.id}`, {
-                method: "PATCH",
-                body: JSON.stringify({ title: newVal }),
-              }).catch(console.error);
+              patchBoardTitle(board.id, newVal).catch(console.error);
             }}
             as="h1"
             textClassName="text-[20px] text-white"
