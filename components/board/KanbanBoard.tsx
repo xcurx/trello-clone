@@ -158,8 +158,16 @@ export function KanbanBoard({
 
   const patchListInBoard = (
     listId: string,
-    patch: { title?: string; color?: string | null },
+    patch: { title?: string; color?: string | null; isArchived?: boolean },
   ) => {
+    if (patch.isArchived) {
+      setBoard((current) => ({
+        ...current,
+        lists: current.lists.filter((list) => list.id !== listId),
+      }));
+      return;
+    }
+
     setBoard((current) => ({
       ...current,
       lists: current.lists.map((list) =>

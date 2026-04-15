@@ -165,7 +165,7 @@ export const cardService = {
 
     return prisma.card.findMany({
       where: {
-        list: { boardId },
+        list: { boardId, isArchived: false },
         isArchived: false,
         ...(query && {
           title: { contains: query, mode: "insensitive" as const },

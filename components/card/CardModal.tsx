@@ -3,6 +3,7 @@
 import { format, formatDistanceToNow } from "date-fns";
 import {
   AlignLeft,
+  Archive,
   CheckCircle2,
   CheckSquare,
   ChevronDown,
@@ -177,6 +178,11 @@ export function CardModal() {
         : current,
     );
     refreshBoard();
+  };
+
+  const handleToggleCardArchivedState = async () => {
+    if (!card) return;
+    await saveCardPatch({ isArchived: !card.isArchived });
   };
 
   const handleToggleMember = async (member: MemberData) => {
@@ -408,38 +414,64 @@ export function CardModal() {
             ) : null}
 
             <div className="flex h-14 items-center justify-between border-b border-white/10 bg-black/14 px-4">
-            <button
-              type="button"
-              className="inline-flex h-8 items-center gap-1 rounded-md bg-[#1f7a52] px-3 text-sm font-semibold text-white"
-            >
-              {card.list.title}
-              <ChevronDown className="h-4 w-4" />
-            </button>
+              <button
+                type="button"
+                className="inline-flex h-8 items-center gap-1 rounded-md bg-[#1f7a52] px-3 text-sm font-semibold text-white"
+              >
+                {card.list.title}
+                <ChevronDown className="h-4 w-4" />
+              </button>
 
-            <div className="flex items-center gap-1 pr-9">
-              <button
-                type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
-                aria-label="Card cover"
-              >
-                <ImageIcon className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
-                aria-label="Watch card"
-              >
-                <Eye className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
-                aria-label="More"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1 pr-9">
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+                  aria-label="Card cover"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+                  aria-label="Watch card"
+                >
+                  <Eye className="h-4 w-4" />
+                </button>
+
+                <Popover
+                  trigger={
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+                      aria-label="More"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  }
+                  title="Actions"
+                  side="bottom"
+                  align="end"
+                  contentClassName="w-44 bg-[#2b2e38] text-white border-white/10"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleToggleCardArchivedState().catch(console.error);
+                    }}
+                    className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-white/86 transition-colors hover:bg-white/8"
+                  >
+                    {card.isArchived ? "Restore" : "Archive"}
+                  </button>
+                </Popover>
+              </div>
             </div>
-            </div>
+
+            {card.isArchived ? (
+              <div className="flex items-center gap-2 border-b border-white/10 bg-white/14 px-4 py-2 text-sm text-white/84">
+                <Archive className="h-4 w-4" />
+                This card was archived on {format(new Date(card.updatedAt), "d MMM yyyy 'at' HH:mm")}
+              </div>
+            ) : null}
 
             <div className="grid min-h-[520px] grid-cols-1 lg:grid-cols-[minmax(0,1fr)_460px]">
               <div className="space-y-7 px-6 pb-6 pt-5">

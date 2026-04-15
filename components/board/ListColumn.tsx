@@ -57,7 +57,7 @@ interface ListColumnProps {
   onRequestCopyList?: (listId: string, title: string) => void;
   onListPatched?: (
     listId: string,
-    patch: { title?: string; color?: string | null },
+    patch: { title?: string; color?: string | null; isArchived?: boolean },
   ) => void;
   isOverlay?: boolean;
 }
@@ -204,8 +204,11 @@ function SortableListColumn({
   const [isLoadingMoveCardsLists, setIsLoadingMoveCardsLists] = useState(false);
   const [isMovingList, setIsMovingList] = useState(false);
   const [isMovingCards, setIsMovingCards] = useState(false);
+  const [isArchivingList, setIsArchivingList] = useState(false);
+  const [isArchivingCards, setIsArchivingCards] = useState(false);
   const [moveListError, setMoveListError] = useState<string | null>(null);
   const [moveCardsError, setMoveCardsError] = useState<string | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const router = useRouter();
@@ -446,6 +449,61 @@ function SortableListColumn({
       setMoveCardsError(getMessage(error, "Failed to move cards"));
     } finally {
       setIsMovingCards(false);
+    }
+  };
+
+  const handleArchiveList = async () => {
+    setArchiveError(null);
+    setIsArchivingList(true);
+
+    try {
+      const response = await fetch(`/api/lists/${list.id}/archive`, {
+        method: "PATCH",
+      });
+
+      const payload = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? "Failed to archive list");
+      }
+
+      onListPatched?.(list.id, { isArchived: true });
+      setListActionsMenuVersion((value) => value + 1);
+      router.refresh();
+    } catch (error) {
+      setArchiveError(getMessage(error, "Failed to archive list"));
+    } finally {
+      setIsArchivingList(false);
+    }
+  };
+
+  const handleArchiveAllCards = async () => {
+    setArchiveError(null);
+    setIsArchivingCards(true);
+
+    try {
+      const response = await fetch(`/api/lists/${list.id}/archive-cards`, {
+        method: "PATCH",
+      });
+
+      const payload = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? "Failed to archive cards");
+      }
+
+      setListActionsMenuVersion((value) => value + 1);
+      router.refresh();
+    } catch (error) {
+      setArchiveError(getMessage(error, "Failed to archive cards"));
+    } finally {
+      setIsArchivingCards(false);
     }
   };
 
@@ -704,18 +762,30 @@ function SortableListColumn({
 
             <button
               type="button"
-              disabled
-              className="block w-full cursor-not-allowed rounded-md px-2 py-1.5 text-left text-sm text-white/50"
+              onClick={() => {
+                void handleArchiveList();
+              }}
+              disabled={isArchivingList || isArchivingCards}
+              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-white/86 transition-colors hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-65"
             >
-              Archive this list
+              {isArchivingList ? "Archiving list..." : "Archive this list"}
             </button>
             <button
               type="button"
-              disabled
-              className="block w-full cursor-not-allowed rounded-md px-2 py-1.5 text-left text-sm text-white/50"
+              onClick={() => {
+                void handleArchiveAllCards();
+              }}
+              disabled={list.cards.length === 0 || isArchivingList || isArchivingCards}
+              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-white/86 transition-colors hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-65"
             >
-              Archive all cards in this list
+              {isArchivingCards
+                ? "Archiving cards..."
+                : "Archive all cards in this list"}
             </button>
+
+            {archiveError ? (
+              <p className="px-2 pt-1 text-xs text-[#ffb4b4]">{archiveError}</p>
+            ) : null}
           </div>
         </Popover>
       </div>

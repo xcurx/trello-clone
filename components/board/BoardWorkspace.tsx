@@ -2,6 +2,7 @@
 
 import { format, isAfter, isBefore, isToday } from "date-fns";
 import {
+  Archive,
   ArrowLeft,
   CalendarDays,
   Check,
@@ -19,6 +20,8 @@ import {
   Search,
   Share2,
   Star,
+  RotateCcw,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
@@ -106,6 +109,24 @@ type SwitchBoardItem = {
     members?: number;
   };
 };
+
+type ArchivedListItem = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  cardsCount: number;
+};
+
+type ArchivedCardItem = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  listId: string;
+  listTitle: string;
+  commentsCount: number;
+};
+
+type ArchivedItemsTab = "lists" | "cards";
 
 type BoardMenuView = "menu" | "change-background" | "colors";
 
@@ -208,6 +229,22 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   const [backgroundChangeError, setBackgroundChangeError] = useState<
     string | null
   >(null);
+  const [isArchivedItemsOpen, setIsArchivedItemsOpen] = useState(false);
+  const [archivedItemsTab, setArchivedItemsTab] =
+    useState<ArchivedItemsTab>("lists");
+  const [archivedSearch, setArchivedSearch] = useState("");
+  const [archivedLists, setArchivedLists] = useState<ArchivedListItem[]>([]);
+  const [archivedCards, setArchivedCards] = useState<ArchivedCardItem[]>([]);
+  const [isArchivedItemsLoading, setIsArchivedItemsLoading] = useState(false);
+  const [archivedItemsError, setArchivedItemsError] = useState<string | null>(
+    null,
+  );
+  const [archivedActionKey, setArchivedActionKey] = useState<string | null>(
+    null,
+  );
+  const [archivedActionError, setArchivedActionError] = useState<string | null>(
+    null,
+  );
 
   const deferredQuery = useDeferredValue(query);
 
@@ -264,6 +301,71 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   useEffect(() => {
     setActiveBoardBackground(board.backgroundColor);
   }, [board.id, board.backgroundColor]);
+
+  useEffect(() => {
+    if (!isArchivedItemsOpen) return;
+
+    const controller = new AbortController();
+
+    const loadArchivedItems = async () => {
+      setIsArchivedItemsLoading(true);
+      setArchivedItemsError(null);
+
+      try {
+        const query = new URLSearchParams();
+        query.set("type", archivedItemsTab);
+
+        const trimmedQuery = archivedSearch.trim();
+        if (trimmedQuery) {
+          query.set("q", trimmedQuery);
+        }
+
+        const response = await fetch(
+          `/api/boards/${board.id}/archived?${query.toString()}`,
+          {
+            signal: controller.signal,
+            cache: "no-store",
+          },
+        );
+
+        const payload = (await response.json()) as {
+          success?: boolean;
+          data?: {
+            lists?: ArchivedListItem[];
+            cards?: ArchivedCardItem[];
+          };
+          error?: string;
+        };
+
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error ?? "Failed to load archived items");
+        }
+
+        setArchivedLists(payload.data?.lists ?? []);
+        setArchivedCards(payload.data?.cards ?? []);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setArchivedItemsError(
+          error instanceof Error
+            ? error.message
+            : "Failed to load archived items",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsArchivedItemsLoading(false);
+        }
+      }
+    };
+
+    loadArchivedItems().catch(console.error);
+
+    return () => {
+      controller.abort();
+    };
+  }, [archivedItemsTab, archivedSearch, board.id, isArchivedItemsOpen]);
 
   const isInboxVisible = surfaceVisibility.inbox;
   const isBoardVisible = surfaceVisibility.board;
@@ -419,6 +521,20 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     setIsSwitchBoardsOpen(true);
   };
 
+  const openArchivedItemsDialog = () => {
+    setBoardMenuView("menu");
+    setArchivedItemsTab("lists");
+    setArchivedSearch("");
+    setArchivedItemsError(null);
+    setArchivedActionError(null);
+    setIsArchivedItemsOpen(true);
+  };
+
+  const closeArchivedItemsDialog = () => {
+    setIsArchivedItemsOpen(false);
+    setArchivedActionKey(null);
+  };
+
   const handleSwitchBoard = (targetBoardId: string) => {
     setIsSwitchBoardsOpen(false);
 
@@ -427,6 +543,109 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     }
 
     router.push(`/b/${targetBoardId}`);
+  };
+
+  const requestArchivedAction = async (url: string, init?: RequestInit) => {
+    const response = await fetch(url, init);
+    const payload = (await response.json()) as {
+      success?: boolean;
+      error?: string;
+    };
+
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.error ?? "Request failed");
+    }
+  };
+
+  const handleRestoreArchivedList = async (listId: string) => {
+    const actionKey = `restore-list:${listId}`;
+    setArchivedActionError(null);
+    setArchivedActionKey(actionKey);
+
+    try {
+      await requestArchivedAction(`/api/lists/${listId}/restore`, {
+        method: "PATCH",
+      });
+
+      setArchivedLists((current) => current.filter((list) => list.id !== listId));
+      router.refresh();
+    } catch (error) {
+      setArchivedActionError(
+        error instanceof Error ? error.message : "Failed to restore list",
+      );
+    } finally {
+      setArchivedActionKey(null);
+    }
+  };
+
+  const handleDeleteArchivedList = async (listId: string) => {
+    const actionKey = `delete-list:${listId}`;
+    setArchivedActionError(null);
+    setArchivedActionKey(actionKey);
+
+    try {
+      await requestArchivedAction(`/api/lists/${listId}`, {
+        method: "DELETE",
+      });
+
+      setArchivedLists((current) => current.filter((list) => list.id !== listId));
+      router.refresh();
+    } catch (error) {
+      setArchivedActionError(
+        error instanceof Error ? error.message : "Failed to delete list",
+      );
+    } finally {
+      setArchivedActionKey(null);
+    }
+  };
+
+  const handleRestoreArchivedCard = async (cardId: string) => {
+    const actionKey = `restore-card:${cardId}`;
+    setArchivedActionError(null);
+    setArchivedActionKey(actionKey);
+
+    try {
+      await requestArchivedAction(`/api/cards/${cardId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isArchived: false }),
+      });
+
+      setArchivedCards((current) => current.filter((card) => card.id !== cardId));
+      router.refresh();
+    } catch (error) {
+      setArchivedActionError(
+        error instanceof Error ? error.message : "Failed to restore card",
+      );
+    } finally {
+      setArchivedActionKey(null);
+    }
+  };
+
+  const handleDeleteArchivedCard = async (cardId: string) => {
+    const actionKey = `delete-card:${cardId}`;
+    setArchivedActionError(null);
+    setArchivedActionKey(actionKey);
+
+    try {
+      await requestArchivedAction(`/api/cards/${cardId}`, {
+        method: "DELETE",
+      });
+
+      setArchivedCards((current) => current.filter((card) => card.id !== cardId));
+      router.refresh();
+    } catch (error) {
+      setArchivedActionError(
+        error instanceof Error ? error.message : "Failed to delete card",
+      );
+    } finally {
+      setArchivedActionKey(null);
+    }
+  };
+
+  const handleOpenArchivedCard = (cardId: string) => {
+    closeArchivedItemsDialog();
+    openCard(cardId);
   };
 
   const updateBoardBackground = async (backgroundColor: BoardBackgroundKey) => {
@@ -858,6 +1077,15 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                       <span className="h-6 w-6 rounded-sm bg-[linear-gradient(135deg,#7a8cff,#d16cff)]" />
                       Change background
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={openArchivedItemsDialog}
+                      className="flex w-full items-center gap-3 rounded-md bg-white/7 px-3 py-2.5 text-left text-[15px] font-medium text-white/88 transition-colors hover:bg-white/12"
+                    >
+                      <Archive className="h-5 w-5 text-white/72" />
+                      Archived items
+                    </button>
                   </div>
                 ) : null}
 
@@ -1119,6 +1347,183 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
           </button>
         </div>
       </div>
+
+      <Dialog
+        isOpen={isArchivedItemsOpen}
+        onClose={closeArchivedItemsDialog}
+        className="max-w-[760px] border border-white/10 bg-[#2b2e38] text-white"
+      >
+        <div className="px-6 pb-6 pt-4">
+          <div className="relative flex items-center justify-center">
+            <button
+              type="button"
+              onClick={closeArchivedItemsDialog}
+              className="absolute left-5 inline-flex h-8 w-8 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Back"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <h3 className="text-lg font-semibold text-white/86">Archived items</h3>
+          </div>
+
+          <div className="mt-4 flex items-center gap-2">
+            <input
+              type="text"
+              value={archivedSearch}
+              onChange={(event) => setArchivedSearch(event.target.value)}
+              placeholder="Search"
+              className="h-10 flex-1 rounded-md border border-white/25 bg-[#272b35] px-3 text-sm text-white outline-none placeholder:text-white/50 focus:border-[#8fb8ff]"
+            />
+
+            <div className="rounded-md bg-white/7 p-1">
+              <button
+                type="button"
+                onClick={() => setArchivedItemsTab("lists")}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  archivedItemsTab === "lists"
+                    ? "bg-white text-[#1f2328]"
+                    : "text-white/76 hover:bg-white/10 hover:text-white",
+                )}
+              >
+                Lists
+              </button>
+              <button
+                type="button"
+                onClick={() => setArchivedItemsTab("cards")}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  archivedItemsTab === "cards"
+                    ? "bg-white text-[#1f2328]"
+                    : "text-white/76 hover:bg-white/10 hover:text-white",
+                )}
+              >
+                Cards
+              </button>
+            </div>
+          </div>
+
+          {archivedItemsError ? (
+            <p className="mt-3 text-sm text-[#ffb4b4]">{archivedItemsError}</p>
+          ) : null}
+
+          {archivedActionError ? (
+            <p className="mt-2 text-xs text-[#ffb4b4]">{archivedActionError}</p>
+          ) : null}
+
+          <div className="mt-4 max-h-[360px] overflow-y-auto rounded-lg border border-white/8 bg-black/10">
+            {isArchivedItemsLoading ? (
+              <div className="px-4 py-5 text-sm text-white/65">Loading archived items...</div>
+            ) : archivedItemsTab === "lists" ? (
+              archivedLists.length > 0 ? (
+                <div className="divide-y divide-white/10">
+                  {archivedLists.map((archivedList) => {
+                    const restoreKey = `restore-list:${archivedList.id}`;
+                    const deleteKey = `delete-list:${archivedList.id}`;
+
+                    return (
+                      <div
+                        key={archivedList.id}
+                        className="flex items-center justify-between gap-3 px-4 py-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-white/90">
+                            {archivedList.title}
+                          </p>
+                          <p className="text-xs text-white/55">
+                            {archivedList.cardsCount} cards · archived {format(new Date(archivedList.updatedAt), "MMM d")}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleRestoreArchivedList(archivedList.id);
+                            }}
+                            disabled={archivedActionKey === restoreKey}
+                            className="inline-flex h-8 items-center gap-1 rounded-md bg-white/8 px-3 text-sm font-medium text-white/86 transition-colors hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-65"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Restore
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleDeleteArchivedList(archivedList.id);
+                            }}
+                            disabled={archivedActionKey === deleteKey}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/8 text-white/86 transition-colors hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-65"
+                            aria-label="Delete archived list"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="px-4 py-5 text-sm text-white/65">No archived lists found.</div>
+              )
+            ) : archivedCards.length > 0 ? (
+              <div className="divide-y divide-white/10">
+                {archivedCards.map((archivedCard) => {
+                  const restoreKey = `restore-card:${archivedCard.id}`;
+                  const deleteKey = `delete-card:${archivedCard.id}`;
+
+                  return (
+                    <div
+                      key={archivedCard.id}
+                      className="flex items-center justify-between gap-3 px-4 py-3"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleOpenArchivedCard(archivedCard.id)}
+                        className="min-w-0 text-left"
+                      >
+                        <p className="truncate text-sm font-medium text-white/90 hover:text-white">
+                          {archivedCard.title}
+                        </p>
+                        <p className="text-xs text-white/55">
+                          {archivedCard.listTitle} · {archivedCard.commentsCount} comments · archived {format(new Date(archivedCard.updatedAt), "MMM d")}
+                        </p>
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleRestoreArchivedCard(archivedCard.id);
+                          }}
+                          disabled={archivedActionKey === restoreKey}
+                          className="inline-flex h-8 items-center gap-1 rounded-md bg-white/8 px-3 text-sm font-medium text-white/86 transition-colors hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-65"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          Restore
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleDeleteArchivedCard(archivedCard.id);
+                          }}
+                          disabled={archivedActionKey === deleteKey}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/8 text-white/86 transition-colors hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-65"
+                          aria-label="Delete archived card"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="px-4 py-5 text-sm text-white/65">No archived cards found.</div>
+            )}
+          </div>
+        </div>
+      </Dialog>
 
       <Dialog
         isOpen={isSwitchBoardsOpen}

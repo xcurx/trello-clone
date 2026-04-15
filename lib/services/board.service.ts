@@ -18,6 +18,7 @@ export const boardService = {
       where: { id },
       include: {
         lists: {
+          where: { isArchived: false },
           orderBy: { position: "asc" },
           include: {
             cards: {
@@ -49,6 +50,90 @@ export const boardService = {
         },
       },
     });
+  },
+
+  async getArchivedItems(
+    boardId: string,
+    data?: { query?: string; type?: "cards" | "lists" | "all" },
+  ) {
+    const normalizedQuery = data?.query?.trim();
+    const type = data?.type ?? "all";
+
+    const [lists, cards] = await Promise.all([
+      type === "cards"
+        ? Promise.resolve([])
+        : prisma.list.findMany({
+            where: {
+              boardId,
+              isArchived: true,
+              ...(normalizedQuery
+                ? {
+                    title: {
+                      contains: normalizedQuery,
+                      mode: "insensitive" as const,
+                    },
+                  }
+                : {}),
+            },
+            orderBy: { updatedAt: "desc" },
+            select: {
+              id: true,
+              title: true,
+              updatedAt: true,
+              _count: { select: { cards: true } },
+            },
+          }),
+      type === "lists"
+        ? Promise.resolve([])
+        : prisma.card.findMany({
+            where: {
+              isArchived: true,
+              list: { boardId },
+              ...(normalizedQuery
+                ? {
+                    title: {
+                      contains: normalizedQuery,
+                      mode: "insensitive" as const,
+                    },
+                  }
+                : {}),
+            },
+            orderBy: { updatedAt: "desc" },
+            select: {
+              id: true,
+              title: true,
+              updatedAt: true,
+              list: {
+                select: {
+                  id: true,
+                  title: true,
+                },
+              },
+              _count: {
+                select: {
+                  comments: true,
+                },
+              },
+            },
+          }),
+    ]);
+
+    return {
+      lists: lists.map((list) => ({
+        id: list.id,
+        title: list.title,
+        updatedAt: list.updatedAt,
+        cardsCount: list._count.cards,
+      })),
+      cards: cards.map((card) => ({
+        id: card.id,
+        title: card.title,
+        updatedAt: card.updatedAt,
+        listId: card.list.id,
+        listTitle: card.list.title,
+        commentsCount: card._count.comments,
+      })),
+    };
   },
 
   async create(data: { title: string; backgroundColor?: string }) {

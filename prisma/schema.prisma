@@ -55,6 +55,7 @@ model List {
   boardId   String
   title     String
   color     String?
+  isArchived Boolean @default(false)
   position  Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -9,6 +9,7 @@ export const createListSchema = z.object({
 export const updateListSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   color: z.string().nullable().optional(),
+  isArchived: z.boolean().optional(),
 });
 
 export const copyListSchema = z.object({

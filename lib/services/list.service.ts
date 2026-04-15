@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 export const listService = {
   async create(boardId: string, data: { title: string; color?: string | null }) {
     const maxPosition = await prisma.list.aggregate({
-      where: { boardId },
+      where: { boardId, isArchived: false },
       _max: { position: true },
     });
     const position = (maxPosition._max.position ?? -1) + 1;
@@ -21,7 +21,7 @@ export const listService = {
   async getByBoard(boardId: string) {
     const [lists, cardCounts] = await Promise.all([
       prisma.list.findMany({
-        where: { boardId },
+        where: { boardId, isArchived: false },
         orderBy: { position: "asc" },
         select: {
           id: true,
@@ -34,7 +34,7 @@ export const listService = {
         by: ["listId"],
         where: {
           isArchived: false,
-          list: { boardId },
+          list: { boardId, isArchived: false },
         },
         _count: {
           _all: true,
@@ -52,7 +52,10 @@ export const listService = {
     }));
   },
 
-  async update(id: string, data: { title?: string; color?: string | null }) {
+  async update(
+    id: string,
+    data: { title?: string; color?: string | null; isArchived?: boolean },
+  ) {
     return prisma.list.update({
       where: { id },
       data,
@@ -63,11 +66,15 @@ export const listService = {
     return prisma.$transaction(async (tx) => {
       const existingList = await tx.list.findUnique({
         where: { id },
-        select: { id: true, boardId: true, position: true },
+        select: { id: true, boardId: true, position: true, isArchived: true },
       });
 
       if (!existingList) {
         throw new Error("List not found");
+      }
+
+      if (existingList.isArchived) {
+        throw new Error("Cannot move archived list");
       }
 
       const targetBoard = await tx.board.findUnique({
@@ -91,7 +98,7 @@ export const listService = {
 
       if (existingList.boardId === data.targetBoardId) {
         const totalLists = await tx.list.count({
-          where: { boardId: existingList.boardId },
+          where: { boardId: existingList.boardId, isArchived: false },
         });
 
         const clampedPosition = Math.max(
@@ -110,6 +117,7 @@ export const listService = {
           await tx.list.updateMany({
             where: {
               boardId: existingList.boardId,
+              isArchived: false,
               position: {
                 gt: existingList.position,
                 lte: clampedPosition,
@@ -123,6 +131,7 @@ export const listService = {
           await tx.list.updateMany({
             where: {
               boardId: existingList.boardId,
+              isArchived: false,
               position: {
                 gte: clampedPosition,
                 lt: existingList.position,
@@ -141,7 +150,7 @@ export const listService = {
       }
 
       const targetBoardCount = await tx.list.count({
-        where: { boardId: data.targetBoardId },
+        where: { boardId: data.targetBoardId, isArchived: false },
       });
 
       const clampedPosition = Math.max(
@@ -152,6 +161,7 @@ export const listService = {
       await tx.list.updateMany({
         where: {
           boardId: existingList.boardId,
+          isArchived: false,
           position: { gt: existingList.position },
         },
         data: {
@@ -162,6 +172,7 @@ export const listService = {
       await tx.list.updateMany({
         where: {
           boardId: data.targetBoardId,
+          isArchived: false,
           position: { gte: clampedPosition },
         },
         data: {
@@ -173,12 +184,100 @@ export const listService = {
         where: { id },
         data: {
           boardId: data.targetBoardId,
+          isArchived: false,
           position: clampedPosition,
         },
       });
     }, {
       timeout: 15000,
     });
+  },
+
+  async archive(id: string) {
+    return prisma.$transaction(async (tx) => {
+      const list = await tx.list.findUnique({
+        where: { id },
+        select: { id: true, boardId: true, position: true, isArchived: true },
+      });
+
+      if (!list) {
+        throw new Error("List not found");
+      }
+
+      if (list.isArchived) {
+        return tx.list.findUnique({ where: { id } });
+      }
+
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(72102, hashtext(${list.boardId}))
+      `;
+
+      await tx.list.updateMany({
+        where: {
+          boardId: list.boardId,
+          isArchived: false,
+          position: { gt: list.position },
+        },
+        data: {
+          position: { decrement: 1 },
+        },
+      });
+
+      return tx.list.update({
+        where: { id },
+        data: { isArchived: true },
+      });
+    });
+  },
+
+  async restore(id: string) {
+    return prisma.$transaction(async (tx) => {
+      const list = await tx.list.findUnique({
+        where: { id },
+        select: { id: true, boardId: true, isArchived: true },
+      });
+
+      if (!list) {
+        throw new Error("List not found");
+      }
+
+      if (!list.isArchived) {
+        return tx.list.findUnique({ where: { id } });
+      }
+
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(72102, hashtext(${list.boardId}))
+      `;
+
+      const maxPosition = await tx.list.aggregate({
+        where: { boardId: list.boardId, isArchived: false },
+        _max: { position: true },
+      });
+
+      const nextPosition = (maxPosition._max.position ?? -1) + 1;
+
+      return tx.list.update({
+        where: { id },
+        data: {
+          isArchived: false,
+          position: nextPosition,
+        },
+      });
+    });
+  },
+
+  async archiveAllCards(listId: string) {
+    const result = await prisma.card.updateMany({
+      where: {
+        listId,
+        isArchived: false,
+      },
+      data: {
+        isArchived: true,
+      },
+    });
+
+    return { archived: result.count };
   },
 
   async moveAllCards(
@@ -289,7 +388,7 @@ export const listService = {
       }
 
       const maxPosition = await tx.list.aggregate({
-        where: { boardId: sourceList.boardId },
+        where: { boardId: sourceList.boardId, isArchived: false },
         _max: { position: true },
       });
       const position = (maxPosition._max.position ?? -1) + 1;
@@ -301,6 +400,7 @@ export const listService = {
           boardId: sourceList.boardId,
           title: nextTitle,
           color: sourceList.color,
+          isArchived: false,
           position,
         },
       });
