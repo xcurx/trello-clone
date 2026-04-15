@@ -1,45 +1,52 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #005f98;
-  --color-primary-container: #0079BF;
-  --color-primary-fixed: #cfe5ff;
+  --color-primary: #579dff;
+  --color-primary-container: #85b8ff;
+  --color-primary-fixed: #1f6feb;
   --color-on-primary: #ffffff;
-  --color-on-primary-fixed-variant: #004a77;
+  --color-on-primary-fixed-variant: #cfe1ff;
 
-  --color-surface: #f8f9fd;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #f2f3f7;
-  --color-surface-container: #edeef2;
-  --color-surface-container-high: #e7e8ec;
-  --color-surface-container-highest: #e1e2e6;
-  --color-surface-dim: #d9dade;
+  --color-surface: #1d2125;
+  --color-surface-container-lowest: #22272b;
+  --color-surface-container-low: #1f2328;
+  --color-surface-container: #282e33;
+  --color-surface-container-high: #323940;
+  --color-surface-container-highest: #3d444d;
+  --color-surface-dim: #161a1d;
 
-  --color-on-surface: #191c1f;
-  --color-on-surface-variant: #404751;
+  --color-on-surface: #f1f2f4;
+  --color-on-surface-variant: #9fadbc;
 
-  --color-outline: #707882;
-  --color-outline-variant: #c0c7d2;
+  --color-outline: #738496;
+  --color-outline-variant: #454f59;
 
   --color-error: #ba1a1a;
   --color-error-container: #ffdad6;
   --color-on-error: #ffffff;
 
-  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans:
+    var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --radius-xs: 2px;
   --radius-sm: 3px;
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
 
-  --shadow-card-hover: 0 2px 8px rgba(25, 28, 31, 0.08);
-  --shadow-card-drag: 0 8px 24px rgba(25, 28, 31, 0.12), 0 2px 8px rgba(25, 28, 31, 0.08);
-  --shadow-modal: 0 16px 48px rgba(25, 28, 31, 0.16), 0 4px 16px rgba(25, 28, 31, 0.08);
-  --shadow-popover: 0 8px 24px rgba(25, 28, 31, 0.12);
-  --shadow-navbar: 0 1px 0 rgba(25, 28, 31, 0.06);
+  --shadow-card-hover: 0 8px 24px rgba(5, 8, 10, 0.24);
+  --shadow-card-drag:
+    0 18px 36px rgba(5, 8, 10, 0.3), 0 8px 16px rgba(5, 8, 10, 0.2);
+  --shadow-modal:
+    0 24px 56px rgba(5, 8, 10, 0.45), 0 10px 24px rgba(5, 8, 10, 0.24);
+  --shadow-popover: 0 16px 40px rgba(5, 8, 10, 0.34);
+  --shadow-navbar: 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+
   body {
     background-color: var(--color-surface);
     color: var(--color-on-surface);
@@ -49,10 +56,10 @@
 
 /* Glassmorphism helpers */
 .glass-panel {
-  background: rgba(248, 249, 253, 0.80);
+  background: rgba(29, 33, 37, 0.78);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(192, 199, 210, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* Scrollbar styling for lists */
@@ -61,12 +68,12 @@
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.04);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-outline-variant);
+  background: rgba(159, 173, 188, 0.32);
   border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-outline);
+  background: rgba(159, 173, 188, 0.5);
 }

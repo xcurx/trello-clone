@@ -5,15 +5,15 @@ import { boardService } from "@/lib/services/board.service";
 
 // Map our gradients exactly as in Dashboard
 const GRADIENTS: Record<string, string> = {
-  ocean: "linear-gradient(135deg, #0079bf, #00629d)",
-  sunset: "linear-gradient(135deg, #eb5a46, #ff9f1a)",
-  forest: "linear-gradient(135deg, #61bd4f, #0a8043)",
-  lavender: "linear-gradient(135deg, #c377e0, #7c5cbf)",
-  midnight: "linear-gradient(135deg, #344563, #091e42)",
-  sky: "linear-gradient(135deg, #00c2e0, #0079bf)",
-  berry: "linear-gradient(135deg, #ff78cb, #c377e0)",
-  slate: "linear-gradient(135deg, #838c91, #505f79)",
-  snow: "linear-gradient(135deg, #f8f9fd, #e1e2e6)",
+  ocean: "linear-gradient(180deg, #5a437f 0%, #754992 52%, #965687 100%)",
+  sunset: "linear-gradient(180deg, #5b3b31 0%, #824b4a 52%, #9e5f72 100%)",
+  forest: "linear-gradient(180deg, #1f4f47 0%, #2d5f58 52%, #4a6d64 100%)",
+  lavender: "linear-gradient(180deg, #67458d 0%, #7d4e99 48%, #96568c 100%)",
+  midnight: "linear-gradient(180deg, #253252 0%, #354565 52%, #4d5d78 100%)",
+  sky: "linear-gradient(180deg, #204a67 0%, #355f84 52%, #536b98 100%)",
+  berry: "linear-gradient(180deg, #693760 0%, #874b77 52%, #a76184 100%)",
+  slate: "linear-gradient(180deg, #38434e 0%, #495565 52%, #5e6278 100%)",
+  snow: "linear-gradient(180deg, #40465a 0%, #525a72 52%, #6e6784 100%)",
 };
 
 interface PageProps {
@@ -53,7 +53,7 @@ export default async function BoardPage({ params }: PageProps) {
 
   return (
     <div
-      className="flex-1 flex flex-col relative w-full h-full"
+      className="relative flex h-full w-full flex-1 flex-col"
       style={bgStyle}
     >
       <BoardWorkspace board={transformedBoard} />

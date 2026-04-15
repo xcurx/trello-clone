@@ -2,14 +2,43 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Clock, CheckSquare, AlignLeft } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { AlignLeft, CheckSquare, Clock } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Avatar } from "@/components/ui/Avatar";
-import { format } from "date-fns";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { cn } from "@/lib/utils";
+
+export interface KanbanCardData {
+  id: string;
+  title: string;
+  description?: string | null;
+  dueDate?: string | Date | null;
+  coverColor?: string | null;
+  checklistDone?: number;
+  checklistItems?: unknown[];
+  labels?: Array<{
+    id: string;
+    label: {
+      id: string;
+      title: string;
+      color: string;
+    };
+  }>;
+  members?: Array<{
+    id: string;
+    member: {
+      id: string;
+      name: string;
+      avatarUrl: string | null;
+    };
+  }>;
+  _count?: {
+    checklistItems?: number;
+    comments?: number;
+  };
+}
 
 interface KanbanCardProps {
-  card: any;
+  card: KanbanCardData;
   isOverlay?: boolean;
 }
 
@@ -43,20 +72,16 @@ export function KanbanCard({ card, isOverlay }: KanbanCardProps) {
       <div
         ref={setNodeRef}
         style={style}
-        className="h-[60px] bg-primary-fixed/50 border-2 border-dashed border-primary/50 rounded-md ring-2 ring-inset ring-primary/20 backdrop-blur-sm"
+        className="h-[92px] rounded-xl border-2 border-dashed border-white/18 bg-white/8"
       />
     );
   }
 
-  // Label chips logic
-  const labels = card.labels?.map((cl: any) => cl.label) || [];
-  const checklistTotal = card.checklistItems?.length ?? card._count?.checklistItems ?? 0;
+  const labels = card.labels?.map((entry) => entry.label) || [];
+  const checklistTotal =
+    card.checklistItems?.length ?? card._count?.checklistItems ?? 0;
   const checklistDone = card.checklistDone ?? 0;
-  const isChecklistComplete = checklistTotal > 0 && checklistDone === checklistTotal;
-  
-  const hasDescription = !!card.description;
-  const hasComments = !!card._count?.comments && card._count.comments > 0;
-  const members = card.members?.map((cm: any) => cm.member) || [];
+  const members = card.members?.map((entry) => entry.member) || [];
 
   const handleOpenCard = () => {
     const params = new URLSearchParams(searchParams.toString());
@@ -65,81 +90,68 @@ export function KanbanCard({ card, isOverlay }: KanbanCardProps) {
   };
 
   return (
-    <div
+    <button
+      type="button"
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
       onClick={handleOpenCard}
       className={cn(
-        "bg-surface-container-lowest rounded-md p-2 shadow-sm border border-[#091e420f] hover:border-[#091e4224] hover:shadow-card-hover cursor-pointer group active:cursor-grabbing",
-        isOverlay && "opacity-95 shadow-card-drag rotate-3"
+        "group cursor-pointer rounded-xl border border-white/6 bg-[#2b3036] p-3 shadow-[0_8px_18px_rgba(0,0,0,0.22)] transition-all hover:border-white/10 hover:bg-[#323840] hover:shadow-[0_14px_26px_rgba(0,0,0,0.28)] active:cursor-grabbing",
+        isOverlay && "rotate-2 opacity-95 shadow-card-drag",
       )}
     >
-      {/* Labels Strip Option vs Chips */}
-      {labels.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-1.5 pointer-events-none">
-          {labels.map((lbl: any) => (
-            <div
-              key={lbl.id}
-              title={lbl.title}
+      {card.coverColor ? (
+        <div
+          className="mb-2 h-1.5 w-full rounded-full"
+          style={{ backgroundColor: card.coverColor }}
+        />
+      ) : null}
+
+      {labels.length > 0 ? (
+        <div className="mb-2 flex flex-wrap gap-1">
+          {labels.map((label) => (
+            <span
+              key={label.id}
+              title={label.title}
               className="h-2 w-10 rounded-xs"
-              style={{ backgroundColor: lbl.color }}
+              style={{ backgroundColor: label.color }}
             />
           ))}
         </div>
-      )}
+      ) : null}
 
-      {/* Title */}
-      <h4 className="text-[14px] font-medium leading-[1.3] text-on-surface pointer-events-none break-words whitespace-pre-wrap mb-2">
+      <h4 className="mb-3 whitespace-pre-wrap break-words text-[14px] font-medium leading-[1.35] text-white/92">
         {card.title}
       </h4>
 
-      {/* Badges and Members Row */}
-      <div className="flex items-center justify-between pointer-events-none">
-        <div className="flex items-center gap-2.5 text-on-surface-variant">
-          {(card.dueDate || hasDescription || checklistTotal > 0 || hasComments) && (
-            <div className="flex items-center gap-2">
-              {hasDescription && (
-                <div title="This card has a description.">
-                  <AlignLeft className="w-3.5 h-3.5" />
-                </div>
-              )}
-              {card.dueDate && (
-                <div title="Due date">
-                  <Clock className="w-3.5 h-3.5" />
-                </div>
-              )}
-              {checklistTotal > 0 && (
-                <div className={cn("flex items-center gap-1 text-[12px]", isChecklistComplete && "text-[#1d4a10] bg-[#61bd4f]/20 px-1 rounded-sm")}>
-                  <CheckSquare className="w-3.5 h-3.5" />
-                  <span>{checklistDone}/{checklistTotal}</span>
-                </div>
-              )}
-            </div>
-          )}
+      <div className="flex items-end justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-white/52">
+          {card.description ? <AlignLeft className="h-3.5 w-3.5" /> : null}
+          {card.dueDate ? <Clock className="h-3.5 w-3.5" /> : null}
+          {checklistTotal > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-md bg-black/16 px-1.5 py-1 text-[11px] font-medium text-white/72">
+              <CheckSquare className="h-3.5 w-3.5" />
+              {checklistDone}/{checklistTotal}
+            </span>
+          ) : null}
         </div>
 
-        {/* Member Avatars */}
-        {members.length > 0 && (
-          <div className="flex items-center justify-end z-[0]">
-            {members.slice(0, 3).map((m: any) => (
-              <Avatar 
-                key={m.id} 
-                src={m.avatarUrl} 
-                name={m.name} 
-                size="sm" 
-                className="-ml-1 border border-white/50 shadow-sm" 
+        {members.length > 0 ? (
+          <div className="flex items-center">
+            {members.slice(0, 3).map((member) => (
+              <Avatar
+                key={member.id}
+                src={member.avatarUrl}
+                name={member.name}
+                size="sm"
+                className="-ml-1 border border-[#2b3036] first:ml-0"
               />
             ))}
-            {members.length > 3 && (
-              <div className="w-6 h-6 rounded-full -ml-1 border border-white/50 bg-surface-container-high text-[10px] font-bold flex items-center justify-center">
-                +{members.length - 3}
-              </div>
-            )}
           </div>
-        )}
+        ) : null}
       </div>
-    </div>
+    </button>
   );
 }

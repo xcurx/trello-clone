@@ -1,48 +1,76 @@
+import { Bell, CircleHelp, LayoutGrid, Megaphone, Search } from "lucide-react";
 import Link from "next/link";
-import { Search, Plus } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 
 export function Navbar() {
   return (
-    <nav className="h-12 bg-primary text-on-primary flex items-center justify-between px-3 box-border shadow-navbar z-50 shrink-0">
-      <div className="flex items-center gap-4">
-        {/* Logo area */}
-        <Link
-          href="/"
-          className="font-inter font-semibold text-xl tracking-tight opacity-90 hover:opacity-100 flex items-center gap-1 transition-opacity"
-        >
-          <div className="w-4 h-4 bg-on-primary rounded-sm opacity-80" />
-          Trello
-        </Link>
-        {/* Main Links */}
-        <div className="hidden md:flex items-center gap-1">
-          {["Workspaces", "Recent", "Starred"].map((item) => (
-            <button
-              key={item}
-              className="text-sm px-3 py-1.5 rounded-sm bg-transparent hover:bg-white/10 font-medium transition-colors"
-            >
-              {item}
-            </button>
-          ))}
-          <button className="ml-2 text-sm px-3 py-1.5 rounded-sm bg-white/20 hover:bg-white/30 font-medium transition-colors flex items-center gap-1">
-            Create
-          </button>
-        </div>
-      </div>
+    <nav className="flex h-12 shrink-0 items-center gap-3 border-b border-white/10 bg-[#1a1d21] px-4 text-white">
+      <button
+        type="button"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+        aria-label="Workspace menu"
+      >
+        <LayoutGrid className="h-4 w-4" />
+      </button>
 
-      <div className="flex items-center gap-2">
-        <div className="relative hidden sm:block">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/70" />
+      <Link
+        href="/"
+        className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-white/8"
+      >
+        <div className="grid h-7 w-7 place-items-center rounded-md bg-[#0c66e4] shadow-[inset_0_-1px_0_rgba(0,0,0,0.24)]">
+          <div className="flex gap-1">
+            <span className="block h-3.5 w-1.5 rounded-sm bg-white" />
+            <span className="block h-3.5 w-1.5 rounded-sm bg-white/85" />
+          </div>
+        </div>
+        <span className="text-[19px] font-semibold tracking-tight">Trello</span>
+      </Link>
+
+      <div className="mx-auto hidden max-w-[780px] flex-1 items-center gap-3 md:flex">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45" />
           <input
             type="text"
-            placeholder="Search tasks, labels..."
-            className="h-8 w-50 focus:w-[400px] transition-[width] bg-white/20 hover:bg-white/30 focus:bg-white focus:text-on-surface focus:placeholder:text-on-surface-variant text-sm px-8 rounded-sm outline-none text-white placeholder:text-white/70"
+            placeholder="Search"
+            className="h-8 w-full rounded-md border border-white/16 bg-white/6 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/45 focus:border-white/26 focus:bg-white/10"
           />
         </div>
-        <button className="md:hidden w-8 h-8 flex items-center justify-center rounded-sm bg-white/20 hover:bg-white/30 text-white">
-          <Plus className="w-5 h-5" />
+        <button
+          type="button"
+          className="inline-flex h-8 items-center rounded-md bg-[#579dff] px-3 text-sm font-medium text-[#082145] transition-colors hover:bg-[#85b8ff]"
+        >
+          Create
         </button>
-        <Avatar name="User" size="md" className="cursor-pointer" />
+      </div>
+
+      <div className="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          className="hidden h-8 items-center rounded-md bg-[#d16cff] px-3 text-sm font-medium text-[#2c1333] md:inline-flex"
+        >
+          14 days left
+        </button>
+
+        {[
+          { icon: Megaphone, label: "Announcements" },
+          { icon: Bell, label: "Notifications" },
+          { icon: CircleHelp, label: "Help" },
+        ].map(({ icon: Icon, label }) => (
+          <button
+            key={label}
+            type="button"
+            aria-label={label}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <Icon className="h-4 w-4" />
+          </button>
+        ))}
+
+        <Avatar
+          name="SK"
+          size="md"
+          className="ml-1 bg-[#ff9f1a] text-[#2a1600]"
+        />
       </div>
     </nav>
   );
