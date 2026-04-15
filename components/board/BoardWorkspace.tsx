@@ -2,13 +2,22 @@
 
 import { format, isAfter, isBefore, isToday } from "date-fns";
 import {
+  ArrowLeft,
   CalendarDays,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronsLeftRight,
   Filter,
+  Image as ImageIcon,
   Inbox,
+  LayoutDashboard,
+  ListFilter,
   MoreHorizontal,
+  Palette,
+  Pin,
   Search,
   Share2,
-  Sparkles,
   Star,
   Users,
   X,
@@ -18,10 +27,12 @@ import {
   type Dispatch,
   type SetStateAction,
   useDeferredValue,
+  useEffect,
   useMemo,
   useState,
 } from "react";
 import { Avatar } from "@/components/ui/Avatar";
+import { Dialog } from "@/components/ui/Dialog";
 import { EditableText } from "@/components/ui/EditableText";
 import { Popover } from "@/components/ui/Popover";
 import { ResizableSeparator } from "@/components/ui/ResizableSeparator";
@@ -86,6 +97,35 @@ type WorkspaceBoard = {
   lists: WorkspaceList[];
 };
 
+type SwitchBoardItem = {
+  id: string;
+  title: string;
+  backgroundColor: string;
+  _count?: {
+    lists?: number;
+    members?: number;
+  };
+};
+
+type BoardMenuView = "menu" | "change-background" | "colors";
+
+type BoardBackgroundKey =
+  | "ocean"
+  | "sunset"
+  | "forest"
+  | "lavender"
+  | "midnight"
+  | "sky"
+  | "berry"
+  | "slate"
+  | "snow";
+
+type BoardBackgroundOption = {
+  key: BoardBackgroundKey;
+  emoji: string;
+  label: string;
+};
+
 interface BoardWorkspaceProps {
   board: WorkspaceBoard;
 }
@@ -94,6 +134,49 @@ type DueDateFilter = "all" | "overdue" | "today" | "week" | "none";
 
 const RAIL_MIN_WIDTH = 240;
 const RAIL_MAX_WIDTH = 420;
+
+const BOARD_PREVIEW_GRADIENTS: Record<string, string> = {
+  ocean: "linear-gradient(135deg, #0079bf, #00629d)",
+  sunset: "linear-gradient(135deg, #eb5a46, #ff9f1a)",
+  forest: "linear-gradient(135deg, #61bd4f, #0a8043)",
+  lavender: "linear-gradient(135deg, #c377e0, #7c5cbf)",
+  midnight: "linear-gradient(135deg, #344563, #091e42)",
+  sky: "linear-gradient(135deg, #00c2e0, #0079bf)",
+  berry: "linear-gradient(135deg, #ff78cb, #c377e0)",
+  slate: "linear-gradient(135deg, #838c91, #505f79)",
+  snow: "linear-gradient(135deg, #f8f9fd, #e1e2e6)",
+};
+
+const BOARD_CANVAS_GRADIENTS: Record<BoardBackgroundKey, string> = {
+  ocean: "linear-gradient(180deg, #5a437f 0%, #754992 52%, #965687 100%)",
+  sunset: "linear-gradient(180deg, #5b3b31 0%, #824b4a 52%, #9e5f72 100%)",
+  forest: "linear-gradient(180deg, #1f4f47 0%, #2d5f58 52%, #4a6d64 100%)",
+  lavender:
+    "linear-gradient(180deg, #67458d 0%, #7d4e99 48%, #96568c 100%)",
+  midnight:
+    "linear-gradient(180deg, #253252 0%, #354565 52%, #4d5d78 100%)",
+  sky: "linear-gradient(180deg, #204a67 0%, #355f84 52%, #536b98 100%)",
+  berry: "linear-gradient(180deg, #693760 0%, #874b77 52%, #a76184 100%)",
+  slate: "linear-gradient(180deg, #38434e 0%, #495565 52%, #5e6278 100%)",
+  snow: "linear-gradient(180deg, #40465a 0%, #525a72 52%, #6e6784 100%)",
+};
+
+const BOARD_BACKGROUND_OPTIONS: BoardBackgroundOption[] = [
+  { key: "midnight", emoji: "🪐", label: "Midnight" },
+  { key: "sky", emoji: "❄️", label: "Sky" },
+  { key: "ocean", emoji: "🌊", label: "Ocean" },
+  { key: "berry", emoji: "🔮", label: "Berry" },
+  { key: "lavender", emoji: "🌈", label: "Lavender" },
+  { key: "sunset", emoji: "🍑", label: "Sunset" },
+  { key: "snow", emoji: "🌸", label: "Snow" },
+  { key: "forest", emoji: "🌍", label: "Forest" },
+  { key: "slate", emoji: "👽", label: "Slate" },
+];
+
+const resolveBoardBackgroundGradient = (backgroundColor: string) => {
+  const key = backgroundColor as BoardBackgroundKey;
+  return BOARD_CANVAS_GRADIENTS[key] ?? BOARD_CANVAS_GRADIENTS.ocean;
+};
 
 export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   const router = useRouter();
@@ -105,8 +188,108 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [dueDateFilter, setDueDateFilter] = useState<DueDateFilter>("all");
   const [railWidth, setRailWidth] = useState(296);
+  const [surfaceVisibility, setSurfaceVisibility] = useState({
+    inbox: true,
+    board: true,
+  });
+  const [isSwitchBoardsOpen, setIsSwitchBoardsOpen] = useState(false);
+  const [boardSearch, setBoardSearch] = useState("");
+  const [availableBoards, setAvailableBoards] = useState<SwitchBoardItem[]>(
+    [],
+  );
+  const [boardsLoading, setBoardsLoading] = useState(false);
+  const [boardsError, setBoardsError] = useState<string | null>(null);
+  const [isWorkspaceExpanded, setIsWorkspaceExpanded] = useState(true);
+  const [boardMenuView, setBoardMenuView] = useState<BoardMenuView>("menu");
+  const [activeBoardBackground, setActiveBoardBackground] = useState(
+    board.backgroundColor,
+  );
+  const [isChangingBackground, setIsChangingBackground] = useState(false);
+  const [backgroundChangeError, setBackgroundChangeError] = useState<
+    string | null
+  >(null);
 
   const deferredQuery = useDeferredValue(query);
+
+  useEffect(() => {
+    if (!isSwitchBoardsOpen) return;
+
+    const controller = new AbortController();
+
+    const loadBoards = async () => {
+      setBoardsLoading(true);
+      setBoardsError(null);
+
+      try {
+        const response = await fetch("/api/boards", {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+
+        const payload = (await response.json()) as {
+          success?: boolean;
+          data?: SwitchBoardItem[];
+          error?: string;
+        };
+
+        if (!response.ok || !payload.success || !Array.isArray(payload.data)) {
+          throw new Error(payload.error ?? "Failed to load boards");
+        }
+
+        setAvailableBoards(payload.data);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setBoardsError(
+          error instanceof Error
+            ? error.message
+            : "Failed to load boards",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setBoardsLoading(false);
+        }
+      }
+    };
+
+    loadBoards();
+
+    return () => {
+      controller.abort();
+    };
+  }, [isSwitchBoardsOpen]);
+
+  useEffect(() => {
+    setActiveBoardBackground(board.backgroundColor);
+  }, [board.id, board.backgroundColor]);
+
+  const isInboxVisible = surfaceVisibility.inbox;
+  const isBoardVisible = surfaceVisibility.board;
+  const isSplitView = isInboxVisible && isBoardVisible;
+  const isSingleSurfaceView = !isSplitView;
+  const inboxToggleLocked = isInboxVisible && !isBoardVisible;
+  const boardToggleLocked = isBoardVisible && !isInboxVisible;
+
+  const filteredBoards = useMemo(() => {
+    const queryValue = boardSearch.trim().toLowerCase();
+    if (!queryValue) return availableBoards;
+
+    return availableBoards.filter((boardItem) =>
+      boardItem.title.toLowerCase().includes(queryValue),
+    );
+  }, [availableBoards, boardSearch]);
+
+  const recentBoards = useMemo(
+    () => filteredBoards.slice(0, 6),
+    [filteredBoards],
+  );
+
+  const boardCanvasBackground = useMemo(
+    () => resolveBoardBackgroundGradient(activeBoardBackground),
+    [activeBoardBackground],
+  );
 
   const filteredLists = useMemo(() => {
     const now = new Date();
@@ -216,13 +399,101 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     );
   };
 
+  const toggleSurface = (surface: "inbox" | "board") => {
+    setSurfaceVisibility((current) => {
+      const next = {
+        ...current,
+        [surface]: !current[surface],
+      };
+
+      if (!next.inbox && !next.board) {
+        return current;
+      }
+
+      return next;
+    });
+  };
+
+  const openSwitchBoardsDialog = () => {
+    setBoardSearch("");
+    setIsSwitchBoardsOpen(true);
+  };
+
+  const handleSwitchBoard = (targetBoardId: string) => {
+    setIsSwitchBoardsOpen(false);
+
+    if (targetBoardId === board.id) {
+      return;
+    }
+
+    router.push(`/b/${targetBoardId}`);
+  };
+
+  const updateBoardBackground = async (backgroundColor: BoardBackgroundKey) => {
+    if (backgroundColor === activeBoardBackground || isChangingBackground) {
+      return;
+    }
+
+    const previous = activeBoardBackground;
+
+    setActiveBoardBackground(backgroundColor);
+    setBackgroundChangeError(null);
+    setIsChangingBackground(true);
+
+    try {
+      const response = await fetch(`/api/boards/${board.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ backgroundColor }),
+      });
+
+      const payload = (await response.json()) as {
+        success?: boolean;
+        data?: { backgroundColor?: string };
+        error?: string;
+      };
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error ?? "Failed to update board background");
+      }
+
+      setActiveBoardBackground(payload.data?.backgroundColor ?? backgroundColor);
+    } catch (error) {
+      setActiveBoardBackground(previous);
+      setBackgroundChangeError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update board background",
+      );
+    } finally {
+      setIsChangingBackground(false);
+    }
+  };
+
+  const handleBoardMenuTrigger = () => {
+    setBoardMenuView("menu");
+    setBackgroundChangeError(null);
+  };
+
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-[#1d2125]">
-      <div className="flex h-full min-h-0 gap-3 px-4 pb-4 pt-2">
-        <aside
-          style={{ width: railWidth }}
-          className="hidden shrink-0 overflow-hidden rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(80,59,128,0.94),rgba(108,69,140,0.94),rgba(151,84,133,0.92))] shadow-[0_20px_50px_rgba(0,0,0,0.28)] lg:flex lg:flex-col"
-        >
+      <div
+        className={cn(
+          "flex h-full min-h-0 w-full",
+          isSplitView ? "gap-3 px-4 pb-4 pt-2" : "p-0",
+        )}
+      >
+        {isInboxVisible ? (
+          <aside
+            style={isSplitView ? { width: railWidth } : { width: "100%" }}
+            className={cn(
+              "min-h-0 overflow-hidden bg-[linear-gradient(180deg,rgba(80,59,128,0.94),rgba(108,69,140,0.94),rgba(151,84,133,0.92))] flex flex-col",
+              isSplitView ? "hidden shrink-0 lg:flex" : "flex-1",
+              isSplitView
+                ? "rounded-[20px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.28)]"
+                : "rounded-none border-0 shadow-none",
+            )}
+          >
           <div className="flex h-14 items-center justify-between border-b border-white/10 bg-black/12 px-4">
             <div className="flex items-center gap-2">
               <Inbox className="h-4 w-4 text-white/78" />
@@ -284,11 +555,21 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
               </div>
             </div>
           </div>
-        </aside>
+          </aside>
+        ) : null}
 
-        <ResizableSeparator onResize={resizeRail} />
+        {isSplitView ? <ResizableSeparator onResize={resizeRail} /> : null}
 
-        <section className="min-w-0 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(111,73,140,0.36)_0%,rgba(118,76,140,0.2)_100%)] shadow-[0_24px_60px_rgba(0,0,0,0.3)] backdrop-blur-sm">
+        {isBoardVisible ? (
+          <section
+            style={{ background: boardCanvasBackground }}
+            className={cn(
+              "min-w-0 flex min-h-0 flex-1 flex-col overflow-hidden",
+              isSingleSurfaceView
+                ? "w-full rounded-none border-0 shadow-none"
+                : "rounded-[22px] border border-white/10 shadow-[0_24px_60px_rgba(0,0,0,0.3)] backdrop-blur-sm",
+            )}
+          >
           <div className="flex h-14 items-center gap-3 border-b border-white/10 bg-black/14 px-4">
             <div className="flex min-w-0 items-center gap-3">
               <EditableText
@@ -547,12 +828,166 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                 Share
               </button>
 
-              <button
-                type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+              <Popover
+                trigger={
+                  <button
+                    type="button"
+                    onClick={handleBoardMenuTrigger}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                }
+                side="bottom"
+                align="end"
+                contentClassName="w-[352px] rounded-xl border border-white/12 bg-[#2b2e38] text-white shadow-[0_18px_40px_rgba(0,0,0,0.42)]"
               >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
+                {boardMenuView === "menu" ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-center pb-1">
+                      <span className="text-sm font-semibold text-white/72">
+                        Menu
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setBoardMenuView("change-background")}
+                      className="flex w-full items-center gap-3 rounded-md bg-white/7 px-3 py-2.5 text-left text-[15px] font-medium text-white/88 transition-colors hover:bg-white/12"
+                    >
+                      <span className="h-6 w-6 rounded-sm bg-[linear-gradient(135deg,#7a8cff,#d16cff)]" />
+                      Change background
+                    </button>
+                  </div>
+                ) : null}
+
+                {boardMenuView === "change-background" ? (
+                  <div className="space-y-4">
+                    <div className="relative flex items-center justify-center pb-1">
+                      <button
+                        type="button"
+                        onClick={() => setBoardMenuView("menu")}
+                        className="absolute left-0 inline-flex h-7 w-7 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/12 hover:text-white"
+                        aria-label="Back"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </button>
+                      <span className="text-sm font-semibold text-white/72">
+                        Change background
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        disabled
+                        className="overflow-hidden rounded-lg border border-white/10 bg-white/6 text-left opacity-60"
+                      >
+                        <div className="h-16 bg-[linear-gradient(120deg,#4e4f58,#3f434e)]" />
+                        <div className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white/82">
+                          <ImageIcon className="h-4 w-4" />
+                          Photos
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setBoardMenuView("colors")}
+                        className="overflow-hidden rounded-lg border border-[#3a7fd9] bg-[#0c66e4]/22 text-left"
+                      >
+                        <div className="h-16 bg-[linear-gradient(135deg,#67458d,#96568c)]" />
+                        <div className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white">
+                          <Palette className="h-4 w-4" />
+                          Colors
+                        </div>
+                      </button>
+                    </div>
+
+                    <div>
+                      <p className="mb-2 text-sm font-semibold text-white/84">
+                        Custom
+                      </p>
+                      <button
+                        type="button"
+                        disabled
+                        className="grid h-24 w-[160px] place-items-center rounded-lg border border-white/10 bg-white/6 text-3xl text-white/42"
+                        title="Custom images coming soon"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {boardMenuView === "colors" ? (
+                  <div className="space-y-4">
+                    <div className="relative flex items-center justify-center pb-1">
+                      <button
+                        type="button"
+                        onClick={() => setBoardMenuView("change-background")}
+                        className="absolute left-0 inline-flex h-7 w-7 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/12 hover:text-white"
+                        aria-label="Back"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </button>
+                      <span className="text-sm font-semibold text-white/72">
+                        Colors
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {BOARD_BACKGROUND_OPTIONS.map((option) => {
+                        const isActive = activeBoardBackground === option.key;
+
+                        return (
+                          <button
+                            key={option.key}
+                            type="button"
+                            onClick={() => updateBoardBackground(option.key)}
+                            disabled={isChangingBackground}
+                            className={cn(
+                              "group relative overflow-hidden rounded-lg border text-left transition-all",
+                              isActive
+                                ? "border-white/55"
+                                : "border-white/12 hover:border-white/28",
+                              isChangingBackground && "cursor-wait",
+                            )}
+                          >
+                            <div
+                              className="h-24 w-full"
+                              style={{
+                                background: resolveBoardBackgroundGradient(
+                                  option.key,
+                                ),
+                              }}
+                            />
+
+                            <div className="absolute inset-0 flex items-end justify-between px-3 py-2">
+                              <span className="text-lg" aria-hidden="true">
+                                {option.emoji}
+                              </span>
+
+                              {isActive ? (
+                                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/30 text-white">
+                                  <Check className="h-4 w-4" />
+                                </span>
+                              ) : null}
+                            </div>
+
+                            <span className="sr-only">{option.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {backgroundChangeError ? (
+                      <p className="text-xs text-[#ff9f9f]">
+                        {backgroundChangeError}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </Popover>
             </div>
           </div>
 
@@ -636,32 +1071,177 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
               <KanbanBoard board={board} hideHeader />
             )}
           </div>
-        </section>
+          </section>
+        ) : null}
       </div>
 
       <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 hidden -translate-x-1/2 lg:block">
-        <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1d2125]/92 p-1.5 shadow-[0_16px_36px_rgba(0,0,0,0.32)] backdrop-blur-md">
-          {[
-            { label: "Inbox", active: false, icon: Inbox },
-            { label: "Planner", active: false, icon: CalendarDays },
-            { label: "Board", active: true, icon: Sparkles },
-          ].map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              className={cn(
-                "inline-flex h-9 items-center gap-2 rounded-xl px-4 text-sm font-medium transition-colors",
-                item.active
-                  ? "bg-[#0c66e4] text-white"
-                  : "text-white/72 hover:bg-white/8 hover:text-white",
-              )}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </button>
-          ))}
+        <div className="pointer-events-auto flex items-center gap-1.5 rounded-2xl border border-white/10 bg-[#1d2125]/92 p-1.5 shadow-[0_16px_36px_rgba(0,0,0,0.32)] backdrop-blur-md">
+          <button
+            type="button"
+            onClick={() => toggleSurface("inbox")}
+            disabled={inboxToggleLocked}
+            className={cn(
+              "inline-flex h-9 items-center gap-2 rounded-xl px-4 text-sm font-medium transition-colors",
+              isInboxVisible
+                ? "bg-[#0c66e4] text-white"
+                : "text-white/72 hover:bg-white/8 hover:text-white",
+              inboxToggleLocked && "cursor-not-allowed opacity-75",
+            )}
+          >
+            <Inbox className="h-4 w-4" />
+            Inbox
+          </button>
+
+          <button
+            type="button"
+            onClick={() => toggleSurface("board")}
+            disabled={boardToggleLocked}
+            className={cn(
+              "inline-flex h-9 items-center gap-2 rounded-xl px-4 text-sm font-medium transition-colors",
+              isBoardVisible
+                ? "bg-[#0c66e4] text-white"
+                : "text-white/72 hover:bg-white/8 hover:text-white",
+              boardToggleLocked && "cursor-not-allowed opacity-75",
+            )}
+          >
+            <LayoutDashboard className="h-4 w-4" />
+            Board
+          </button>
+
+          <button
+            type="button"
+            onClick={openSwitchBoardsDialog}
+            className="inline-flex h-9 items-center gap-2 rounded-xl px-4 text-sm font-medium text-white/78 transition-colors hover:bg-white/8 hover:text-white"
+          >
+            <ChevronsLeftRight className="h-4 w-4" />
+            Switch boards
+          </button>
         </div>
       </div>
+
+      <Dialog
+        isOpen={isSwitchBoardsOpen}
+        onClose={() => setIsSwitchBoardsOpen(false)}
+        className="max-w-[640px] border border-white/10 bg-[#2b2e38] text-white"
+      >
+        <div className="px-6 pb-6 pt-10">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/55" />
+              <input
+                type="text"
+                value={boardSearch}
+                onChange={(event) => setBoardSearch(event.target.value)}
+                placeholder="Search your boards"
+                className="h-10 w-full rounded-md border border-[#6ba4ff] bg-[#242833] pl-9 pr-3 text-sm text-white outline-none placeholder:text-white/50 focus:border-[#8ab6ff]"
+              />
+            </div>
+
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-white/8 text-white/70 transition-colors hover:bg-white/14 hover:text-white"
+              aria-label="List view"
+            >
+              <ListFilter className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-white/8 text-white/70 transition-colors hover:bg-white/14 hover:text-white"
+              aria-label="Pinned boards"
+            >
+              <Pin className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-4 flex items-center gap-2">
+            <span className="rounded-md border border-[#6ba4ff] bg-[#0c66e4]/22 px-2.5 py-1 text-sm font-medium text-[#8ab6ff]">
+              All
+            </span>
+            <span className="rounded-md bg-white/8 px-2.5 py-1 text-sm font-medium text-white/82">
+              Trello Workspace
+            </span>
+          </div>
+
+          <div className="mt-6">
+            <p className="mb-3 text-sm font-semibold text-white/76">Recent</p>
+
+            {boardsLoading ? (
+              <p className="text-sm text-white/58">Loading boards...</p>
+            ) : boardsError ? (
+              <p className="text-sm text-[#ff9f9f]">{boardsError}</p>
+            ) : recentBoards.length === 0 ? (
+              <p className="text-sm text-white/58">No boards found.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {recentBoards.map((boardItem) => (
+                  <button
+                    key={boardItem.id}
+                    type="button"
+                    onClick={() => handleSwitchBoard(boardItem.id)}
+                    className={cn(
+                      "overflow-hidden rounded-lg border border-white/10 text-left transition-all hover:border-white/30",
+                      boardItem.id === board.id && "border-[#6ba4ff]",
+                    )}
+                  >
+                    <div
+                      className="h-16 w-full"
+                      style={{
+                        background:
+                          BOARD_PREVIEW_GRADIENTS[boardItem.backgroundColor] ??
+                          BOARD_PREVIEW_GRADIENTS.ocean,
+                      }}
+                    />
+                    <div className="bg-black/28 px-3 py-2">
+                      <p className="truncate text-sm font-medium text-white">
+                        {boardItem.title}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 border-t border-white/10 pt-4">
+            <button
+              type="button"
+              onClick={() => setIsWorkspaceExpanded((current) => !current)}
+              className="inline-flex items-center gap-2 text-left text-lg font-semibold text-white/84 transition-colors hover:text-white"
+            >
+              {isWorkspaceExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+              Trello Workspace
+            </button>
+
+            {isWorkspaceExpanded ? (
+              <div className="mt-3 max-h-56 space-y-1 overflow-y-auto pr-1">
+                {filteredBoards.map((boardItem) => (
+                  <button
+                    key={`${boardItem.id}-row`}
+                    type="button"
+                    onClick={() => handleSwitchBoard(boardItem.id)}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-md px-2 py-2 text-left transition-colors hover:bg-white/8",
+                      boardItem.id === board.id && "bg-[#0c66e4]/20 text-[#9ac2ff]",
+                    )}
+                  >
+                    <span className="truncate text-sm font-medium">
+                      {boardItem.title}
+                    </span>
+                    <span className="text-xs text-white/56">
+                      {boardItem._count?.lists ?? 0} lists
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }
