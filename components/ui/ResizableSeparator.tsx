@@ -15,6 +15,8 @@ export function ResizableSeparator({
   const lastXRef = useRef(0);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
     lastXRef.current = event.clientX;
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
@@ -38,12 +40,12 @@ export function ResizableSeparator({
       aria-label="Resize sidebar"
       onPointerDown={handlePointerDown}
       className={cn(
-        "group relative hidden w-3 shrink-0 cursor-col-resize touch-none items-stretch justify-center lg:flex",
+        "group relative hidden w-px shrink-0 cursor-col-resize touch-none items-stretch justify-center lg:flex",
         className,
       )}
     >
-      <div className="w-px rounded-full bg-white/10 transition-colors group-hover:bg-white/30" />
-      <div className="absolute inset-y-0 left-1/2 w-7 -translate-x-1/2" />
+      <div className="w-px rounded-full bg-white/14 transition-colors group-hover:bg-white/38" />
+      <div className="absolute inset-y-0 -left-2 -right-2" />
     </button>
   );
 }

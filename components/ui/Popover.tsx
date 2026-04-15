@@ -9,6 +9,8 @@ interface PopoverProps {
   title?: string;
   children: ReactNode;
   contentClassName?: string;
+  containerClassName?: string;
+  triggerClassName?: string;
   side?: "bottom" | "right" | "left" | "top";
   align?: "start" | "center" | "end";
 }
@@ -18,6 +20,8 @@ export function Popover({
   title,
   children,
   contentClassName,
+  containerClassName,
+  triggerClassName,
   side = "bottom",
   align = "start",
 }: PopoverProps) {
@@ -65,8 +69,8 @@ export function Popover({
   if (align === "center" && (side === "bottom" || side === "top")) alignClasses = "left-1/2 -translate-x-1/2";
 
   return (
-    <div className="relative inline-block" ref={containerRef}>
-      <div onClick={() => setIsOpen(!isOpen)}>{trigger}</div>
+    <div className={cn("relative inline-block", containerClassName)} ref={containerRef}>
+      <div className={triggerClassName} onClick={() => setIsOpen(!isOpen)}>{trigger}</div>
       
       {isOpen && (
         <div

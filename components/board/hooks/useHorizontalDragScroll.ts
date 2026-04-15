@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-function shouldStartDragScroll(target: HTMLElement) {
+function shouldStartDragScroll(target: Element) {
   if (target.closest("[data-pan-block='true']")) return false;
 
   if (
@@ -39,8 +39,16 @@ export function useHorizontalDragScroll<T extends HTMLElement>(enabled = true) {
 
     const handleMouseDown = (event: MouseEvent) => {
       if (event.button !== 0) return;
-      if (!(event.target instanceof HTMLElement)) return;
-      if (!shouldStartDragScroll(event.target)) return;
+
+      const target =
+        event.target instanceof Element
+          ? event.target
+          : event.target instanceof Node
+            ? event.target.parentElement
+            : null;
+
+      if (!target) return;
+      if (!shouldStartDragScroll(target)) return;
 
       isDragging = true;
       startX = event.clientX;
@@ -58,6 +66,7 @@ export function useHorizontalDragScroll<T extends HTMLElement>(enabled = true) {
 
       const deltaX = event.clientX - startX;
       container.scrollLeft = startScrollLeft - deltaX;
+      event.preventDefault();
     };
 
     const handleMouseUp = () => {

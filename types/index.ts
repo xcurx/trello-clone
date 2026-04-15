@@ -155,6 +155,8 @@ export type {
   BoardMenuView,
   BoardBackgroundKey,
   BoardBackgroundOption,
+  InboxThemeKey,
+  InboxThemeOption,
   BoardWorkspaceProps,
   DueDateFilter,
 } from "./board-workspace";

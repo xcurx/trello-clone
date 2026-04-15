@@ -3,7 +3,6 @@
 import { format } from "date-fns";
 import { ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";
-import { cn } from "@/lib/utils";
 import type {
   ArchivedCardItem,
   ArchivedItemsTab,
@@ -49,6 +48,8 @@ export function ArchivedItemsDialog({
   onDeleteCard,
   onOpenCard,
 }: ArchivedItemsDialogProps) {
+  const nextTab = tab === "lists" ? "cards" : "lists";
+
   return (
     <Dialog
       isOpen={isOpen}
@@ -77,32 +78,14 @@ export function ArchivedItemsDialog({
             className="h-10 flex-1 rounded-md border border-white/25 bg-[#272b35] px-3 text-sm text-white outline-none placeholder:text-white/50 focus:border-[#8fb8ff]"
           />
 
-          <div className="rounded-md bg-white/7 p-1">
-            <button
-              type="button"
-              onClick={() => onTabChange("lists")}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                tab === "lists"
-                  ? "bg-white text-[#1f2328]"
-                  : "text-white/76 hover:bg-white/10 hover:text-white",
-              )}
-            >
-              Lists
-            </button>
-            <button
-              type="button"
-              onClick={() => onTabChange("cards")}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                tab === "cards"
-                  ? "bg-white text-[#1f2328]"
-                  : "text-white/76 hover:bg-white/10 hover:text-white",
-              )}
-            >
-              Cards
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => onTabChange(nextTab)}
+            className="inline-flex h-10 min-w-[110px] items-center justify-center rounded-md bg-white/9 px-3 text-sm font-medium text-white/88 transition-colors hover:bg-white/14"
+            aria-label={`Switch to ${nextTab}`}
+          >
+            {tab === "lists" ? "Show cards" : "Show lists"}
+          </button>
         </div>
 
         {itemsError ? (

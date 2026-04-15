@@ -36,11 +36,13 @@ import {
 } from "@/components/board/workspace/api";
 import {
   BOARD_BACKGROUND_OPTIONS,
+  INBOX_THEME_OPTIONS,
   BOARD_PREVIEW_GRADIENTS,
   DUE_DATE_FILTER_OPTIONS,
   RAIL_MAX_WIDTH,
   RAIL_MIN_WIDTH,
   resolveBoardBackgroundGradient,
+  resolveInboxThemeGradient,
 } from "@/components/board/workspace/constants";
 import {
   filterBoardLists,
@@ -62,9 +64,11 @@ import type {
   BoardMenuView,
   BoardWorkspaceProps,
   DueDateFilter,
+  InboxThemeKey,
   SwitchBoardItem,
 } from "@/types/board-workspace";
 import { ArchivedItemsDialog } from "./workspace/ArchivedItemsDialog";
+import { InboxThemePicker } from "./workspace/InboxThemePicker";
 import { SwitchBoardsDialog } from "./workspace/SwitchBoardsDialog";
 import { KanbanBoard } from "./KanbanBoard";
 
@@ -115,6 +119,9 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   const [archivedActionError, setArchivedActionError] = useState<string | null>(
     null,
   );
+  const [activeInboxTheme, setActiveInboxTheme] = useState<InboxThemeKey>(
+    "violet",
+  );
 
   const deferredQuery = useDeferredValue(query);
 
@@ -157,6 +164,29 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   useEffect(() => {
     setActiveBoardBackground(board.backgroundColor);
   }, [board.id, board.backgroundColor]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const storageKey = `trello-clone:inbox-theme:${board.id}`;
+    const storedTheme = window.localStorage.getItem(storageKey);
+
+    if (
+      storedTheme &&
+      INBOX_THEME_OPTIONS.some((option) => option.key === storedTheme)
+    ) {
+      setActiveInboxTheme(storedTheme as InboxThemeKey);
+      return;
+    }
+
+    setActiveInboxTheme("violet");
+  }, [board.id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storageKey = `trello-clone:inbox-theme:${board.id}`;
+    window.localStorage.setItem(storageKey, activeInboxTheme);
+  }, [activeInboxTheme, board.id]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -266,6 +296,18 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   const boardCanvasBackground = useMemo(
     () => resolveBoardBackgroundGradient(activeBoardBackground),
     [activeBoardBackground],
+  );
+
+  const inboxPanelBackground = useMemo(
+    () => resolveInboxThemeGradient(activeInboxTheme),
+    [activeInboxTheme],
+  );
+
+  const activeInboxThemeLabel = useMemo(
+    () =>
+      INBOX_THEME_OPTIONS.find((themeOption) => themeOption.key === activeInboxTheme)
+        ?.label ?? "Violet",
+    [activeInboxTheme],
   );
 
   const filteredLists = useMemo(
@@ -524,18 +566,21 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
         className={cn(
           "flex h-full min-h-0 w-full",
           isSplitView
-            ? "gap-3 overflow-x-auto px-4 pb-20 pt-2 [scrollbar-gutter:stable] sm:pb-4"
+            ? "gap-1 overflow-x-auto px-4 pb-20 pt-2 [scrollbar-gutter:stable] sm:pb-4"
             : "p-0 pb-16 sm:pb-0",
         )}
       >
         {isInboxVisible ? (
           <aside
-            style={isSplitView ? { width: railWidth } : { width: "100%" }}
+            style={{
+              ...(isSplitView ? { width: railWidth } : { width: "100%" }),
+              background: inboxPanelBackground,
+            }}
             className={cn(
-              "min-h-0 overflow-hidden bg-[linear-gradient(180deg,rgba(80,59,128,0.94),rgba(108,69,140,0.94),rgba(151,84,133,0.92))] flex flex-col",
+              "min-h-0 overflow-hidden flex flex-col",
               isSplitView ? "flex min-w-[240px] shrink-0" : "flex-1",
               isSplitView
-                ? "rounded-[20px] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.28)]"
+                ? "rounded-[20px] border-x border-b border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.28)]"
                 : "rounded-none border-0 shadow-none",
             )}
           >
@@ -588,17 +633,37 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
           </div>
 
           <div className="border-t border-white/10 px-4 py-3">
-            <div className="flex items-center gap-3 rounded-2xl bg-black/16 px-3 py-3">
-              <div className="h-10 w-10 rounded-2xl bg-[linear-gradient(135deg,#7a8cff,#d16cff)]" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-white">
-                  Workspace color
-                </p>
-                <p className="truncate text-xs text-white/62">
-                  Gradient theme active
-                </p>
-              </div>
-            </div>
+            <Popover
+              containerClassName="block w-full"
+              trigger={
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-2xl bg-black/16 px-3 py-3 text-left transition-colors hover:bg-black/22"
+                >
+                  <div
+                    className="h-10 w-10 rounded-2xl"
+                    style={{ background: inboxPanelBackground }}
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white">
+                      Workspace color
+                    </p>
+                    <p className="truncate text-xs text-white/62">
+                      {activeInboxThemeLabel} theme active
+                    </p>
+                  </div>
+                </button>
+              }
+              title="Inbox theme"
+              side="top"
+              align="center"
+              contentClassName="w-[244px] max-w-[calc(100vw-2rem)] border border-white/12 bg-[#2b2e38] text-white"
+            >
+              <InboxThemePicker
+                activeTheme={activeInboxTheme}
+                onThemeChange={setActiveInboxTheme}
+              />
+            </Popover>
           </div>
           </aside>
         ) : null}
@@ -612,7 +677,7 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
               "min-w-0 flex min-h-0 flex-1 flex-col overflow-hidden",
               isSingleSurfaceView
                 ? "w-full rounded-none border-0 shadow-none"
-                : "min-w-[300px] rounded-[22px] border border-white/10 shadow-[0_24px_60px_rgba(0,0,0,0.3)] backdrop-blur-sm",
+                : "min-w-[300px] rounded-[22px] border-x border-b border-white/10 shadow-[0_24px_60px_rgba(0,0,0,0.3)] backdrop-blur-sm",
             )}
           >
           <div className="flex h-12 items-center gap-2 border-b border-white/10 bg-black/14 px-3 sm:h-14 sm:gap-3 sm:px-4">

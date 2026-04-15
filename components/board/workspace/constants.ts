@@ -1,6 +1,8 @@
 import type {
   BoardBackgroundKey,
   BoardBackgroundOption,
+  InboxThemeKey,
+  InboxThemeOption,
 } from "@/types/board-workspace";
 
 export const RAIL_MIN_WIDTH = 240;
@@ -51,7 +53,42 @@ export const DUE_DATE_FILTER_OPTIONS = [
   { value: "week", label: "Due in the next week" },
 ] as const;
 
+export const INBOX_THEME_OPTIONS: InboxThemeOption[] = [
+  { key: "violet", label: "Violet", emoji: "💜" },
+  { key: "midnight", label: "Midnight", emoji: "🌌" },
+  { key: "azure", label: "Azure", emoji: "🌊" },
+  { key: "ember", label: "Ember", emoji: "🔥" },
+  { key: "forest", label: "Forest", emoji: "🌲" },
+  { key: "sunset", label: "Sunset", emoji: "🌇" },
+  { key: "amethyst", label: "Amethyst", emoji: "🔮" },
+  { key: "rose", label: "Rose", emoji: "🌺" },
+];
+
+export const INBOX_THEME_GRADIENTS: Record<InboxThemeKey, string> = {
+  violet:
+    "linear-gradient(180deg, rgba(80,59,128,0.94), rgba(108,69,140,0.94), rgba(151,84,133,0.92))",
+  midnight:
+    "linear-gradient(180deg, rgba(33,46,70,0.95), rgba(43,58,85,0.94), rgba(54,68,98,0.92))",
+  azure:
+    "linear-gradient(180deg, rgba(30,79,130,0.95), rgba(41,98,151,0.94), rgba(63,120,168,0.92))",
+  ember:
+    "linear-gradient(180deg, rgba(94,48,46,0.95), rgba(122,66,57,0.94), rgba(153,84,67,0.92))",
+  forest:
+    "linear-gradient(180deg, rgba(31,83,68,0.95), rgba(44,102,81,0.94), rgba(66,122,97,0.92))",
+  sunset:
+    "linear-gradient(180deg, rgba(117,62,84,0.95), rgba(145,76,105,0.94), rgba(176,95,127,0.92))",
+  amethyst:
+    "linear-gradient(180deg, rgba(71,56,120,0.95), rgba(90,70,142,0.94), rgba(114,87,166,0.92))",
+  rose:
+    "linear-gradient(180deg, rgba(110,52,91,0.95), rgba(134,66,108,0.94), rgba(160,84,124,0.92))",
+};
+
 export const resolveBoardBackgroundGradient = (backgroundColor: string) => {
   const key = backgroundColor as BoardBackgroundKey;
   return BOARD_CANVAS_GRADIENTS[key] ?? BOARD_CANVAS_GRADIENTS.ocean;
+};
+
+export const resolveInboxThemeGradient = (theme: InboxThemeKey | string) => {
+  const key = theme as InboxThemeKey;
+  return INBOX_THEME_GRADIENTS[key] ?? INBOX_THEME_GRADIENTS.violet;
 };

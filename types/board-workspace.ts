@@ -104,6 +104,22 @@ export type BoardBackgroundOption = {
   label: string;
 };
 
+export type InboxThemeKey =
+  | "violet"
+  | "midnight"
+  | "azure"
+  | "ember"
+  | "forest"
+  | "sunset"
+  | "amethyst"
+  | "rose";
+
+export type InboxThemeOption = {
+  key: InboxThemeKey;
+  label: string;
+  emoji: string;
+};
+
 export interface BoardWorkspaceProps {
   board: WorkspaceBoard;
 }
