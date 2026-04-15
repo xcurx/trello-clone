@@ -64,63 +64,63 @@ interface ListColumnProps {
 
 const DEFAULT_LIST_TONES: ListTone[] = [
   {
-    shell: "bg-[#4f3a72]/84 border-white/8",
-    header: "bg-[#5f4786]/72 text-white",
+    shell: "bg-[#5d4b83]/95",
+    header: "text-white/92",
   },
   {
-    shell: "bg-[#59470f]/84 border-white/8",
-    header: "bg-[#6d5714]/74 text-[#ffec8b]",
+    shell: "bg-[#6a5718]/95",
+    header: "text-[#ffe9a3]",
   },
   {
-    shell: "bg-[#1d5a4c]/84 border-white/8",
-    header: "bg-[#256d5c]/72 text-[#b8f2df]",
+    shell: "bg-[#2a6b5f]/95",
+    header: "text-[#d0f6eb]",
   },
   {
-    shell: "bg-[#171915]/92 border-white/8",
-    header: "bg-[#20231d]/78 text-white",
+    shell: "bg-[#1f2329]/95",
+    header: "text-white/90",
   },
 ];
 
 const LIST_COLOR_TONES: Record<ListColorKey, ListTone> = {
   green: {
-    shell: "bg-[#1d5a4c]/84 border-white/8",
-    header: "bg-[#256d5c]/72 text-[#b8f2df]",
+    shell: "bg-[#2a6b5f]/95",
+    header: "text-[#d0f6eb]",
   },
   yellow: {
-    shell: "bg-[#59470f]/84 border-white/8",
-    header: "bg-[#6d5714]/74 text-[#ffec8b]",
+    shell: "bg-[#6a5718]/95",
+    header: "text-[#ffe9a3]",
   },
   orange: {
-    shell: "bg-[#5c3508]/84 border-white/8",
-    header: "bg-[#733f05]/72 text-[#ffd8ad]",
+    shell: "bg-[#7a4a12]/95",
+    header: "text-[#ffe0b2]",
   },
   red: {
-    shell: "bg-[#5a1e1b]/84 border-white/8",
-    header: "bg-[#712824]/72 text-[#ffcbc5]",
+    shell: "bg-[#6e2d2c]/95",
+    header: "text-[#ffd1cc]",
   },
   purple: {
-    shell: "bg-[#4f3a72]/84 border-white/8",
-    header: "bg-[#5f4786]/72 text-white",
+    shell: "bg-[#5d4b83]/95",
+    header: "text-white/92",
   },
   blue: {
-    shell: "bg-[#1b3f72]/84 border-white/8",
-    header: "bg-[#214f8f]/72 text-[#c5dbff]",
+    shell: "bg-[#2a4f7c]/95",
+    header: "text-[#d8e7ff]",
   },
   teal: {
-    shell: "bg-[#19506a]/84 border-white/8",
-    header: "bg-[#21708f]/72 text-[#c5ecff]",
+    shell: "bg-[#245f73]/95",
+    header: "text-[#d6f1fb]",
   },
   lime: {
-    shell: "bg-[#37591a]/84 border-white/8",
-    header: "bg-[#4b751f]/72 text-[#e5ffbd]",
+    shell: "bg-[#4c6720]/95",
+    header: "text-[#ecffcb]",
   },
   pink: {
-    shell: "bg-[#5a2852]/84 border-white/8",
-    header: "bg-[#74306a]/72 text-[#ffd1f8]",
+    shell: "bg-[#6a3a64]/95",
+    header: "text-[#ffd9f7]",
   },
   gray: {
-    shell: "bg-[#2f333a]/84 border-white/8",
-    header: "bg-[#3a4048]/72 text-[#f0f3f6]",
+    shell: "bg-[#3a414b]/95",
+    header: "text-[#edf2f8]",
   },
 };
 
@@ -614,7 +614,7 @@ function SortableListColumn({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "relative flex max-h-full w-[272px] shrink-0 flex-col overflow-visible rounded-2xl border text-white shadow-[0_14px_34px_rgba(0,0,0,0.24)] backdrop-blur-sm",
+        "relative flex max-h-full w-[272px] shrink-0 flex-col overflow-visible rounded-xl text-white shadow-[0_1px_1px_rgba(0,0,0,0.24),0_8px_16px_rgba(0,0,0,0.16)]",
         tone.shell,
       )}
       >
@@ -622,7 +622,7 @@ function SortableListColumn({
         {...attributes}
         {...listeners}
         className={cn(
-          "group flex cursor-grab items-center justify-between border-b border-white/8 px-3 py-3 active:cursor-grabbing",
+          "group flex cursor-grab items-center justify-between px-3 pb-2 pt-3 active:cursor-grabbing",
           tone.header,
         )}
       >
@@ -790,68 +790,70 @@ function SortableListColumn({
         </Popover>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2 pt-2">
+      <div className="flex flex-1 flex-col overflow-y-auto px-2 pb-2">
         <SortableContext
           id={list.id}
           items={cardsIds}
           strategy={verticalListSortingStrategy}
         >
-          {list.cards.map((card) => (
-            <KanbanCard key={card.id} card={card} />
-          ))}
-        </SortableContext>
-      </div>
-
-      <div className="px-2 pb-2 pt-1">
-        {isAddingCard ? (
-          <div className="space-y-2 rounded-xl bg-black/16 p-2">
-            <textarea
-              ref={textareaRef}
-              className="h-[74px] w-full resize-none rounded-xl border border-white/10 bg-[#1f2328] p-3 text-sm text-white outline-none placeholder:text-white/35"
-              placeholder="Enter a title for this card..."
-              value={newCardTitle}
-              onChange={(event) => setNewCardTitle(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  handleAddCard();
-                }
-                if (event.key === "Escape") {
-                  setIsAddingCard(false);
-                  setNewCardTitle("");
-                }
-              }}
-            />
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleAddCard}
-                className="inline-flex h-8 items-center rounded-md bg-[#579dff] px-3 text-sm font-medium text-[#082145] transition-colors hover:bg-[#85b8ff]"
-              >
-                Add card
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAddingCard(false);
-                  setNewCardTitle("");
-                }}
-                className="inline-flex h-8 items-center rounded-md px-2 text-sm font-medium text-white/68 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                Cancel
-              </button>
-            </div>
+          <div className="flex flex-col gap-2">
+            {list.cards.map((card) => (
+              <KanbanCard key={card.id} card={card} />
+            ))}
           </div>
-        ) : (
-          <button
-            type="button"
-            onClick={openAddCardComposer}
-            className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium text-white/72 transition-colors hover:bg-black/14 hover:text-white"
-          >
-            <Plus className="h-4 w-4" />
-            Add a card
-          </button>
-        )}
+        </SortableContext>
+
+        <div className="pt-0">
+          {isAddingCard ? (
+            <div className="space-y-2 rounded-xl bg-black/16 p-2">
+              <textarea
+                ref={textareaRef}
+                className="h-[74px] w-full resize-none rounded-xl border border-white/10 bg-[#1f2328] p-3 text-sm text-white outline-none placeholder:text-white/35"
+                placeholder="Enter a title for this card..."
+                value={newCardTitle}
+                onChange={(event) => setNewCardTitle(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    handleAddCard();
+                  }
+                  if (event.key === "Escape") {
+                    setIsAddingCard(false);
+                    setNewCardTitle("");
+                  }
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleAddCard}
+                  className="inline-flex h-8 items-center rounded-md bg-[#579dff] px-3 text-sm font-medium text-[#082145] transition-colors hover:bg-[#85b8ff]"
+                >
+                  Add card
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingCard(false);
+                    setNewCardTitle("");
+                  }}
+                  className="inline-flex h-8 items-center rounded-md px-2 text-sm font-medium text-white/68 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={openAddCardComposer}
+              className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-white/78 transition-colors hover:bg-black/12 hover:text-white"
+            >
+              <Plus className="h-4 w-4" />
+              Add a card
+            </button>
+          )}
+        </div>
       </div>
       </div>
 
@@ -1056,14 +1058,14 @@ function ListColumnOverlay({ list }: { list: ListColumnProps["list"] }) {
   return (
     <div
       className={cn(
-        "flex max-h-full w-[272px] shrink-0 flex-col overflow-hidden rounded-2xl border text-white shadow-card-drag backdrop-blur-sm",
+        "flex max-h-full w-[272px] shrink-0 flex-col overflow-hidden rounded-xl text-white shadow-card-drag",
         tone.shell,
         "rotate-2 opacity-90",
       )}
     >
       <div
         className={cn(
-          "flex items-center justify-between border-b border-white/8 px-3 py-3",
+          "flex items-center justify-between px-3 pb-2 pt-3",
           tone.header,
         )}
       >
@@ -1077,7 +1079,7 @@ function ListColumnOverlay({ list }: { list: ListColumnProps["list"] }) {
         {list.cards.slice(0, 4).map((card) => (
           <div
             key={card.id}
-            className="rounded-xl border border-white/6 bg-[#2b3036] p-3 text-sm font-medium text-white/90 shadow-[0_8px_18px_rgba(0,0,0,0.22)]"
+            className="rounded-xl bg-[#2b3036] p-3 text-sm font-medium text-white/90 shadow-[0_1px_1px_rgba(0,0,0,0.18)]"
           >
             {card.title}
           </div>

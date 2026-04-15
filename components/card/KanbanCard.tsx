@@ -45,7 +45,7 @@ interface KanbanCardProps {
 export function KanbanCard({ card, isOverlay = false }: KanbanCardProps) {
   if (isOverlay) {
     return (
-      <div className="rotate-2 rounded-xl border border-white/6 bg-[#2b3036] p-3 text-left shadow-card-drag opacity-95">
+      <div className="rotate-2 rounded-xl bg-[#2b3036] p-3 text-left shadow-card-drag opacity-95">
         <CardContent card={card} />
       </div>
     );
@@ -104,7 +104,7 @@ function SortableKanbanCard({ card }: { card: KanbanCardData }) {
       {...listeners}
       onClick={handleOpenCard}
       className={cn(
-        "group cursor-pointer rounded-xl border border-white/6 bg-[#2b3036] p-3 text-left shadow-[0_8px_18px_rgba(0,0,0,0.22)] transition-all hover:border-white/10 hover:bg-[#323840] hover:shadow-[0_14px_26px_rgba(0,0,0,0.28)] active:cursor-grabbing",
+        "group cursor-pointer rounded-xl bg-[#2b3036] p-3 text-left shadow-[0_1px_1px_rgba(0,0,0,0.18)] transition-all hover:bg-[#323840] hover:shadow-[0_2px_6px_rgba(0,0,0,0.22)] active:cursor-grabbing",
       )}
     >
       <CardContent card={card} />
