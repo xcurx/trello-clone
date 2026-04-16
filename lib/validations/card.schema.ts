@@ -10,6 +10,8 @@ export const updateCardSchema = z.object({
   description: z.string().max(10000).nullable().optional(),
   dueDate: z.iso.datetime().nullable().optional(),
   coverColor: z.string().nullable().optional(),
+  coverImageUrl: z.string().url().nullable().optional(),
+  coverImagePath: z.string().nullable().optional(),
   isArchived: z.boolean().optional(),
 });
 

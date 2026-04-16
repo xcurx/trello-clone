@@ -44,7 +44,9 @@ export default async function BoardPage({ params }: PageProps) {
   };
 
   const bgStyle = {
-    background: GRADIENTS[board.backgroundColor] || GRADIENTS.ocean,
+    background: board.backgroundImageUrl
+      ? `center / cover no-repeat url("${board.backgroundImageUrl}")`
+      : (GRADIENTS[board.backgroundColor] || GRADIENTS.ocean),
     color:
       board.backgroundColor === "snow"
         ? "var(--color-on-surface)"

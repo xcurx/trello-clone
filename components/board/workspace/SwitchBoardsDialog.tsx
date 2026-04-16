@@ -104,9 +104,10 @@ export function SwitchBoardsDialog({
                   <div
                     className="h-16 w-full"
                     style={{
-                      background:
-                        previewGradients[boardItem.backgroundColor] ??
-                        previewGradients.ocean,
+                      background: boardItem.backgroundImageUrl
+                        ? `center / cover no-repeat url("${boardItem.backgroundImageUrl}")`
+                        : (previewGradients[boardItem.backgroundColor] ??
+                          previewGradients.ocean),
                     }}
                   />
                   <div className="bg-black/28 px-3 py-2">

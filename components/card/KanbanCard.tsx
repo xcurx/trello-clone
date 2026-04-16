@@ -94,7 +94,13 @@ function CardContent({ card }: { card: KanbanCardData }) {
 
   return (
     <>
-      {card.coverColor ? (
+      {card.coverImageUrl ? (
+        <img
+          src={card.coverImageUrl}
+          alt="Card cover"
+          className="mb-3 h-16 w-full rounded-lg object-cover"
+        />
+      ) : card.coverColor ? (
         <div
           className="mb-3 h-12 w-full rounded-lg"
           style={{ backgroundColor: card.coverColor }}

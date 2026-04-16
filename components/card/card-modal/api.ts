@@ -1,10 +1,12 @@
 import type {
   ApiResponse,
+  CardAttachmentData,
   CardDetail,
   CommentData,
   LabelData,
   MemberData,
 } from "@/types";
+import { uploadFileViaApi } from "@/lib/uploads/client";
 import type { CardModalState } from "@/types/card-modal";
 
 export async function fetchJson<T>(input: RequestInfo, init?: RequestInit) {
@@ -112,4 +114,46 @@ export async function createCardComment(cardId: string, content: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content }),
   });
+}
+
+export async function uploadCardCoverImage(cardId: string, file: File) {
+  return uploadFileViaApi({
+    purpose: "card-cover",
+    file,
+    cardId,
+  });
+}
+
+export async function uploadCardAttachmentFile(cardId: string, file: File) {
+  return uploadFileViaApi({
+    purpose: "card-attachment",
+    file,
+    cardId,
+  });
+}
+
+export async function createCardAttachment(
+  cardId: string,
+  attachment: {
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    fileUrl: string;
+    storagePath: string;
+  },
+) {
+  return fetchJson<CardAttachmentData>(`/api/cards/${cardId}/attachments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(attachment),
+  });
+}
+
+export async function deleteCardAttachment(cardId: string, attachmentId: string) {
+  return fetchJson<{ deleted: true }>(
+    `/api/cards/${cardId}/attachments/${attachmentId}`,
+    {
+      method: "DELETE",
+    },
+  );
 }

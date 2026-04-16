@@ -1,20 +1,40 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check, Upload } from "lucide-react";
+import { useRef, type ChangeEvent } from "react";
 import { cn } from "@/lib/utils";
 import { CARD_COVER_COLOR_OPTIONS } from "./constants";
 
 interface CoverPopoverContentProps {
   selectedColor: string | null;
+  selectedImageUrl: string | null;
+  isUploadingImage: boolean;
   onSelectColor: (color: string) => void;
-  onRemoveColor: () => void;
+  onUploadImage: (file: File) => void | Promise<void>;
+  onRemoveCover: () => void;
 }
 
 export function CoverPopoverContent({
   selectedColor,
+  selectedImageUrl,
+  isUploadingImage,
   onSelectColor,
-  onRemoveColor,
+  onUploadImage,
+  onRemoveCover,
 }: CoverPopoverContentProps) {
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageSelection = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    void onUploadImage(file);
+  };
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -22,15 +42,45 @@ export function CoverPopoverContent({
           Preview
         </p>
         <div className="rounded-lg border border-white/10 bg-[#242833] p-2">
-          <div
-            className="h-10 rounded-md"
-            style={{ backgroundColor: selectedColor ?? "#2d313b" }}
-          />
+          {selectedImageUrl ? (
+            <img
+              src={selectedImageUrl}
+              alt="Cover preview"
+              className="h-16 w-full rounded-md object-cover"
+            />
+          ) : (
+            <div
+              className="h-10 rounded-md"
+              style={{ backgroundColor: selectedColor ?? "#2d313b" }}
+            />
+          )}
           <div className="mt-2 space-y-1">
             <div className="h-1.5 w-4/5 rounded bg-white/30" />
             <div className="h-1.5 w-3/5 rounded bg-white/18" />
           </div>
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-white/56">
+          Image
+        </p>
+        <button
+          type="button"
+          onClick={() => uploadInputRef.current?.click()}
+          disabled={isUploadingImage}
+          className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-white/8 px-3 text-sm font-medium text-white/84 transition-colors hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-55"
+        >
+          <Upload className="h-4 w-4" />
+          {isUploadingImage ? "Uploading image..." : "Upload image"}
+        </button>
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="hidden"
+          onChange={handleImageSelection}
+        />
       </div>
 
       <div className="space-y-2">
@@ -64,8 +114,8 @@ export function CoverPopoverContent({
 
       <button
         type="button"
-        onClick={onRemoveColor}
-        disabled={!selectedColor}
+        onClick={onRemoveCover}
+        disabled={!selectedColor && !selectedImageUrl}
         className="inline-flex h-8 w-full items-center justify-center rounded-md bg-white/8 px-3 text-sm font-medium text-white/84 transition-colors hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-55"
       >
         Remove cover

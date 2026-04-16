@@ -7,6 +7,7 @@ export interface KanbanCardData {
   dueDate?: string | Date | null;
   isArchived?: boolean;
   coverColor?: string | null;
+  coverImageUrl?: string | null;
   labels?: Array<{
     id: string;
     label: {

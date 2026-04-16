@@ -8,6 +8,8 @@ export interface BoardSummary {
   id: string;
   title: string;
   backgroundColor: string;
+  backgroundImageUrl: string | null;
+  backgroundImagePath?: string | null;
   isStarred: boolean;
   createdAt: string;
   updatedAt: string;
@@ -21,6 +23,8 @@ export interface BoardDetail {
   id: string;
   title: string;
   backgroundColor: string;
+  backgroundImageUrl: string | null;
+  backgroundImagePath?: string | null;
   isStarred: boolean;
   createdAt: string;
   updatedAt: string;
@@ -51,6 +55,8 @@ export interface CardData {
   dueDate: string | null;
   isArchived: boolean;
   coverColor: string | null;
+  coverImageUrl: string | null;
+  coverImagePath?: string | null;
   labels: CardLabelData[];
   members: CardMemberData[];
   _count: {
@@ -65,6 +71,18 @@ export interface CardDetail extends Omit<CardData, "_count" | "checklistDone"> {
   updatedAt: string;
   checklistItems: ChecklistItemData[];
   comments: CommentData[];
+  attachments: CardAttachmentData[];
+}
+
+export interface CardAttachmentData {
+  id: string;
+  cardId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  fileUrl: string;
+  storagePath: string;
+  createdAt: string;
 }
 
 // label

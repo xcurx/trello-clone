@@ -5,6 +5,7 @@ import type {
   BoardBackgroundKey,
   SwitchBoardItem,
 } from "@/types/board-workspace";
+import { uploadFileViaApi } from "@/lib/uploads/client";
 
 type ApiResponse<T> = {
   success?: boolean;
@@ -88,11 +89,16 @@ export async function patchBoardBackground(
   const response = await fetch(`/api/boards/${boardId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ backgroundColor }),
+    body: JSON.stringify({
+      backgroundColor,
+      backgroundImageUrl: null,
+      backgroundImagePath: null,
+    }),
   });
 
   const payload = (await response.json()) as ApiResponse<{
     backgroundColor?: string;
+    backgroundImageUrl?: string | null;
   }>;
 
   if (!response.ok || !payload.success) {
@@ -100,6 +106,38 @@ export async function patchBoardBackground(
   }
 
   return payload.data?.backgroundColor ?? backgroundColor;
+}
+
+export async function uploadBoardBackgroundImage(boardId: string, file: File) {
+  const uploaded = await uploadFileViaApi({
+    purpose: "board-background",
+    file,
+    boardId,
+  });
+
+  const response = await fetch(`/api/boards/${boardId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      backgroundImageUrl: uploaded.fileUrl,
+      backgroundImagePath: uploaded.storagePath,
+    }),
+  });
+
+  const payload = (await response.json()) as ApiResponse<{
+    backgroundImageUrl?: string | null;
+  }>;
+
+  if (!response.ok || !payload.success) {
+    throw new Error(
+      getErrorMessage(payload, "Failed to update board background image"),
+    );
+  }
+
+  return {
+    backgroundImageUrl: payload.data?.backgroundImageUrl ?? uploaded.fileUrl,
+    backgroundImagePath: uploaded.storagePath,
+  };
 }
 
 export async function patchBoardStarStatus(

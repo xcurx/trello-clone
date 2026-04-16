@@ -12,6 +12,7 @@ import {
   Image as ImageIcon,
   MessageSquare,
   MoreHorizontal,
+  Paperclip,
   Plus,
   Tag,
   UserRoundPlus,
@@ -22,14 +23,18 @@ import { useEffect, useMemo, useState } from "react";
 import {
   addCardLabel,
   addCardMember,
+  createCardAttachment,
   createCardComment,
   createChecklistItem,
+  deleteCardAttachment,
   deleteChecklistItem,
   loadCardModalData,
   patchCardDetails,
   patchChecklistItem,
   removeCardLabel,
   removeCardMember,
+  uploadCardAttachmentFile,
+  uploadCardCoverImage,
 } from "@/components/card/card-modal/api";
 import {
   toDateTimeLocalValue,
@@ -43,6 +48,16 @@ import { Popover } from "@/components/ui/Popover";
 import { cn } from "@/lib/utils";
 import type { CardDetail, LabelData, MemberData } from "@/types";
 import type { CardModalState } from "@/types/card-modal";
+
+function formatBytes(sizeBytes: number) {
+  if (sizeBytes < 1024) return `${sizeBytes} B`;
+  if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`;
+  if (sizeBytes < 1024 * 1024 * 1024) {
+    return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
 
 export function CardModal() {
   const searchParams = useSearchParams();
@@ -62,6 +77,8 @@ export function CardModal() {
   const [dueDateValue, setDueDateValue] = useState("");
   const [isClosing, setIsClosing] = useState(false);
   const [isActivityVisible, setIsActivityVisible] = useState(true);
+  const [isUploadingCoverImage, setIsUploadingCoverImage] = useState(false);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
 
   useEffect(() => {
     if (!cardId) {
@@ -298,12 +315,37 @@ export function CardModal() {
 
   const handleSetCoverColor = async (color: string) => {
     if (!card || card.coverColor === color) return;
-    await saveCardPatch({ coverColor: color });
+    await saveCardPatch({
+      coverColor: color,
+      coverImageUrl: null,
+      coverImagePath: null,
+    });
   };
 
-  const handleRemoveCoverColor = async () => {
-    if (!card || !card.coverColor) return;
-    await saveCardPatch({ coverColor: null });
+  const handleUploadCoverImage = async (file: File) => {
+    if (!card || isUploadingCoverImage) return;
+
+    setIsUploadingCoverImage(true);
+
+    try {
+      const uploaded = await uploadCardCoverImage(card.id, file);
+      await saveCardPatch({
+        coverImageUrl: uploaded.fileUrl,
+        coverImagePath: uploaded.storagePath,
+        coverColor: null,
+      });
+    } finally {
+      setIsUploadingCoverImage(false);
+    }
+  };
+
+  const handleRemoveCover = async () => {
+    if (!card || (!card.coverColor && !card.coverImageUrl)) return;
+    await saveCardPatch({
+      coverColor: null,
+      coverImageUrl: null,
+      coverImagePath: null,
+    });
   };
 
   const handleAddComment = async () => {
@@ -320,6 +362,47 @@ export function CardModal() {
         : current,
     );
     setNewComment("");
+    refreshBoard();
+  };
+
+  const handleUploadAttachment = async (file: File) => {
+    if (!card || isUploadingAttachment) return;
+
+    setIsUploadingAttachment(true);
+
+    try {
+      const uploaded = await uploadCardAttachmentFile(card.id, file);
+      const attachment = await createCardAttachment(card.id, uploaded);
+
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              attachments: [attachment, ...current.attachments],
+            }
+          : current,
+      );
+      refreshBoard();
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    if (!card) return;
+
+    await deleteCardAttachment(card.id, attachmentId);
+
+    setCard((current) =>
+      current
+        ? {
+            ...current,
+            attachments: current.attachments.filter(
+              (attachment) => attachment.id !== attachmentId,
+            ),
+          }
+        : current,
+    );
     refreshBoard();
   };
 
@@ -345,9 +428,15 @@ export function CardModal() {
           Loading...
         </div>
       ) : card ? (
-        <div className="relative pb-9">
+        <div className="relative">
           <div className="overflow-hidden">
-            {card.coverColor ? (
+            {card.coverImageUrl ? (
+              <img
+                src={card.coverImageUrl}
+                alt="Card cover"
+                className="h-24 w-full object-cover sm:h-28"
+              />
+            ) : card.coverColor ? (
               <div
                 className="h-24 w-full sm:h-28"
                 style={{ backgroundColor: card.coverColor }}
@@ -381,11 +470,16 @@ export function CardModal() {
                 >
                   <CoverPopoverContent
                     selectedColor={card.coverColor}
+                    selectedImageUrl={card.coverImageUrl}
+                    isUploadingImage={isUploadingCoverImage}
                     onSelectColor={(color) => {
                       handleSetCoverColor(color).catch(console.error);
                     }}
-                    onRemoveColor={() => {
-                      handleRemoveCoverColor().catch(console.error);
+                    onUploadImage={(file) => {
+                      handleUploadCoverImage(file).catch(console.error);
+                    }}
+                    onRemoveCover={() => {
+                      handleRemoveCover().catch(console.error);
                     }}
                   />
                 </Popover>
@@ -792,6 +886,75 @@ export function CardModal() {
                     </div>
                   </div>
                 ) : null}
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3 text-white/84">
+                    <div className="flex items-center gap-2">
+                      <Paperclip className="h-5 w-5" />
+                      <h3 className="text-lg font-semibold">Attachments</h3>
+                    </div>
+
+                    <label className="inline-flex cursor-pointer items-center rounded-sm bg-[#0c66e4] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#0a58c7]">
+                      {isUploadingAttachment ? "Uploading..." : "Add file"}
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          event.target.value = "";
+
+                          if (!file) return;
+                          handleUploadAttachment(file).catch(console.error);
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  {card.attachments.length === 0 ? (
+                    <p className="rounded-md border border-[#626979] bg-[#2d313b] px-3 py-2 text-sm text-white/62">
+                      No attachments yet.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {card.attachments.map((attachment) => (
+                        <div
+                          key={attachment.id}
+                          className="flex items-center gap-3 rounded-md border border-[#626979] bg-[#2d313b] px-3 py-2"
+                        >
+                          <Paperclip className="h-4 w-4 shrink-0 text-white/62" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-white/88">
+                              {attachment.fileName}
+                            </p>
+                            <p className="text-xs text-white/58">
+                              {formatBytes(attachment.sizeBytes)}
+                            </p>
+                          </div>
+                          <a
+                            href={attachment.fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-sm px-2 py-1 text-xs font-medium text-[#8fb8ff] transition-colors hover:bg-white/10 hover:text-[#b5d2ff]"
+                          >
+                            Open
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleDeleteAttachment(attachment.id).catch(
+                                console.error,
+                              );
+                            }}
+                            className="rounded-sm p-1 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+                            aria-label={`Delete attachment ${attachment.fileName}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {isActivityVisible ? (
@@ -809,8 +972,8 @@ export function CardModal() {
             <div className="h-px w-full bg-white/10" />
           </div>
 
-          <div className="pointer-events-none absolute bottom-0 left-1/2 z-10 -translate-x-1/2 translate-y-1/2">
-            <div className="pointer-events-auto inline-flex items-center overflow-hidden rounded-2xl border border-white/12 bg-[#1d2127] p-1 text-sm font-medium text-white/72 shadow-[0_10px_26px_rgba(0,0,0,0.35)]">
+          <div className="flex justify-center px-4 py-3">
+            <div className="inline-flex items-center overflow-hidden rounded-2xl border border-white/12 bg-[#1d2127] p-1 text-sm font-medium text-white/72 shadow-[0_10px_26px_rgba(0,0,0,0.35)]">
               <button
                 type="button"
                 onClick={() => setIsActivityVisible((current) => !current)}

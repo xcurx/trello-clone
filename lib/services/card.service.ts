@@ -30,6 +30,7 @@ export const cardService = {
         labels: { include: { label: true } },
         members: { include: { member: true } },
         checklistItems: { orderBy: { position: "asc" } },
+        attachments: { orderBy: { createdAt: "desc" } },
         comments: {
           orderBy: { createdAt: "desc" },
           include: { member: true },
@@ -41,6 +42,13 @@ export const cardService = {
     });
   },
 
+  async getCoverImagePath(id: string) {
+    return prisma.card.findUnique({
+      where: { id },
+      select: { id: true, coverImagePath: true },
+    });
+  },
+
   async update(
     id: string,
     data: {
@@ -48,6 +56,8 @@ export const cardService = {
       description?: string | null;
       dueDate?: Date | null;
       coverColor?: string | null;
+      coverImageUrl?: string | null;
+      coverImagePath?: string | null;
       isArchived?: boolean;
     },
   ) {

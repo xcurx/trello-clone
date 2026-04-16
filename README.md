@@ -16,6 +16,22 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Supabase Storage Setup
+
+File uploads (board background images, card cover images, and card attachments)
+use Supabase Storage.
+
+Set these environment variables in your local `.env`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL="https://YOUR_PROJECT_REF.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY="YOUR_SUPABASE_SERVICE_ROLE_KEY"
+SUPABASE_STORAGE_BUCKET="trello-assets"
+```
+
+Create a storage bucket named `trello-assets` in Supabase and mark it as
+public if you want direct file URLs to work without signed URL generation.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

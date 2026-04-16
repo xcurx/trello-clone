@@ -25,6 +25,8 @@ model Board {
   id              String   @id @default(cuid())
   title           String
   backgroundColor String   @default("ocean")
+  backgroundImageUrl String?
+  backgroundImagePath String?
   isStarred       Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -78,6 +80,8 @@ model Card {
   dueDate     DateTime?
   isArchived  Boolean   @default(false)
   coverColor  String?
+  coverImageUrl String?
+  coverImagePath String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -86,10 +90,27 @@ model Card {
   checklistItems ChecklistItem[]
   members        CardMember[]
   comments       Comment[]
+  attachments    CardAttachment[]
 
   @@index([listId])
   @@index([listId, position])
   @@map("cards")
+}
+
+model CardAttachment {
+  id          String   @id @default(cuid())
+  cardId      String
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  fileUrl     String
+  storagePath String
+  createdAt   DateTime @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+  @@map("card_attachments")
 }
 
 model Label {

@@ -23,9 +23,11 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
+  type ChangeEvent,
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -33,6 +35,7 @@ import {
   fetchSwitchBoards,
   patchBoardBackground,
   patchBoardStarStatus,
+  uploadBoardBackgroundImage,
   requestArchivedAction,
 } from "@/components/board/workspace/api";
 import {
@@ -100,9 +103,14 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   const [activeBoardBackground, setActiveBoardBackground] = useState(
     board.backgroundColor,
   );
+  const [activeBoardBackgroundImage, setActiveBoardBackgroundImage] = useState(
+    board.backgroundImageUrl ?? null,
+  );
   const [isBoardStarred, setIsBoardStarred] = useState(board.isStarred);
   const [isUpdatingBoardStar, setIsUpdatingBoardStar] = useState(false);
   const [isChangingBackground, setIsChangingBackground] = useState(false);
+  const [isUploadingBoardBackgroundImage, setIsUploadingBoardBackgroundImage] =
+    useState(false);
   const [backgroundChangeError, setBackgroundChangeError] = useState<
     string | null
   >(null);
@@ -125,6 +133,7 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   const [activeInboxTheme, setActiveInboxTheme] = useState<InboxThemeKey>(
     "violet",
   );
+  const boardBackgroundFileInputRef = useRef<HTMLInputElement>(null);
 
   const deferredQuery = useDeferredValue(query);
 
@@ -166,7 +175,8 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
 
   useEffect(() => {
     setActiveBoardBackground(board.backgroundColor);
-  }, [board.id, board.backgroundColor]);
+    setActiveBoardBackgroundImage(board.backgroundImageUrl ?? null);
+  }, [board.id, board.backgroundColor, board.backgroundImageUrl]);
 
   useEffect(() => {
     setIsBoardStarred(board.isStarred);
@@ -300,10 +310,17 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     [filteredBoards],
   );
 
-  const boardCanvasBackground = useMemo(
-    () => resolveBoardBackgroundGradient(activeBoardBackground),
-    [activeBoardBackground],
-  );
+  const boardCanvasStyle = useMemo(() => {
+    if (activeBoardBackgroundImage) {
+      return {
+        background: `center / cover no-repeat url("${activeBoardBackgroundImage}")`,
+      };
+    }
+
+    return {
+      background: resolveBoardBackgroundGradient(activeBoardBackground),
+    };
+  }, [activeBoardBackground, activeBoardBackgroundImage]);
 
   const inboxPanelBackground = useMemo(
     () => resolveInboxThemeGradient(activeInboxTheme),
@@ -541,9 +558,11 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
       return;
     }
 
-    const previous = activeBoardBackground;
+    const previousColor = activeBoardBackground;
+    const previousImage = activeBoardBackgroundImage;
 
     setActiveBoardBackground(backgroundColor);
+    setActiveBoardBackgroundImage(null);
     setBackgroundChangeError(null);
     setIsChangingBackground(true);
 
@@ -551,11 +570,72 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
       const nextBackground = await patchBoardBackground(board.id, backgroundColor);
       setActiveBoardBackground(nextBackground);
     } catch (error) {
-      setActiveBoardBackground(previous);
+      setActiveBoardBackground(previousColor);
+      setActiveBoardBackgroundImage(previousImage);
       setBackgroundChangeError(
         error instanceof Error
           ? error.message
           : "Failed to update board background",
+      );
+    } finally {
+      setIsChangingBackground(false);
+    }
+  };
+
+  const triggerBoardBackgroundImagePicker = () => {
+    boardBackgroundFileInputRef.current?.click();
+  };
+
+  const handleBoardBackgroundImageSelection = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file || isUploadingBoardBackgroundImage || isChangingBackground) {
+      return;
+    }
+
+    const previousImage = activeBoardBackgroundImage;
+    setBackgroundChangeError(null);
+    setIsUploadingBoardBackgroundImage(true);
+
+    try {
+      const result = await uploadBoardBackgroundImage(board.id, file);
+      setActiveBoardBackgroundImage(result.backgroundImageUrl);
+    } catch (error) {
+      setActiveBoardBackgroundImage(previousImage);
+      setBackgroundChangeError(
+        error instanceof Error
+          ? error.message
+          : "Failed to upload board background image",
+      );
+    } finally {
+      setIsUploadingBoardBackgroundImage(false);
+    }
+  };
+
+  const clearBoardBackgroundImage = async () => {
+    if (!activeBoardBackgroundImage || isUploadingBoardBackgroundImage || isChangingBackground) {
+      return;
+    }
+
+    const previousImage = activeBoardBackgroundImage;
+    setBackgroundChangeError(null);
+    setActiveBoardBackgroundImage(null);
+    setIsChangingBackground(true);
+
+    try {
+      await patchBoardBackground(
+        board.id,
+        activeBoardBackground as BoardBackgroundKey,
+      );
+    } catch (error) {
+      setActiveBoardBackgroundImage(previousImage);
+      setBackgroundChangeError(
+        error instanceof Error
+          ? error.message
+          : "Failed to clear custom board background",
       );
     } finally {
       setIsChangingBackground(false);
@@ -703,7 +783,7 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
 
         {isBoardVisible ? (
           <section
-            style={{ background: boardCanvasBackground }}
+            style={boardCanvasStyle}
             className={cn(
               "min-w-0 flex min-h-0 flex-1 flex-col overflow-hidden",
               isSingleSurfaceView
@@ -1060,13 +1140,25 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        disabled
-                        className="overflow-hidden rounded-lg border border-white/10 bg-white/6 text-left opacity-60"
+                        onClick={triggerBoardBackgroundImagePicker}
+                        disabled={isUploadingBoardBackgroundImage || isChangingBackground}
+                        className={cn(
+                          "overflow-hidden rounded-lg border border-white/10 bg-white/6 text-left transition-colors",
+                          (isUploadingBoardBackgroundImage || isChangingBackground) &&
+                            "cursor-wait opacity-70",
+                        )}
                       >
-                        <div className="h-16 bg-[linear-gradient(120deg,#4e4f58,#3f434e)]" />
+                        <div
+                          className="h-16"
+                          style={{
+                            background: activeBoardBackgroundImage
+                              ? `center / cover no-repeat url("${activeBoardBackgroundImage}")`
+                              : "linear-gradient(120deg,#4e4f58,#3f434e)",
+                          }}
+                        />
                         <div className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white/82">
                           <ImageIcon className="h-4 w-4" />
-                          Photos
+                          {isUploadingBoardBackgroundImage ? "Uploading..." : "Photos"}
                         </div>
                       </button>
 
@@ -1087,14 +1179,46 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                       <p className="mb-2 text-sm font-semibold text-white/84">
                         Custom
                       </p>
-                      <button
-                        type="button"
-                        disabled
-                        className="grid h-24 w-[160px] place-items-center rounded-lg border border-white/10 bg-white/6 text-3xl text-white/42"
-                        title="Custom images coming soon"
-                      >
-                        +
-                      </button>
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={triggerBoardBackgroundImagePicker}
+                          disabled={isUploadingBoardBackgroundImage || isChangingBackground}
+                          className={cn(
+                            "grid h-24 w-[160px] place-items-center rounded-lg border border-white/10 bg-white/6 text-3xl text-white/62 transition-colors hover:bg-white/10",
+                            (isUploadingBoardBackgroundImage || isChangingBackground) &&
+                              "cursor-wait opacity-70",
+                          )}
+                          title="Upload a custom background"
+                        >
+                          +
+                        </button>
+
+                        {activeBoardBackgroundImage ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              clearBoardBackgroundImage().catch(console.error);
+                            }}
+                            disabled={isChangingBackground || isUploadingBoardBackgroundImage}
+                            className="inline-flex h-8 items-center rounded-md bg-white/10 px-2.5 text-xs font-medium text-white/84 transition-colors hover:bg-white/16 disabled:cursor-not-allowed disabled:opacity-55"
+                          >
+                            Remove custom image
+                          </button>
+                        ) : null}
+
+                        <input
+                          ref={boardBackgroundFileInputRef}
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          className="hidden"
+                          onChange={(event) => {
+                            handleBoardBackgroundImageSelection(event).catch(
+                              console.error,
+                            );
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 ) : null}
@@ -1216,7 +1340,13 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
                                   onClick={() => openCard(card.id)}
                                   className="w-full rounded-xl border border-white/6 bg-[#24282d] p-3 text-left text-white transition-colors hover:bg-[#2a2f35]"
                                 >
-                                  {card.coverColor ? (
+                                  {card.coverImageUrl ? (
+                                    <img
+                                      src={card.coverImageUrl}
+                                      alt="Card cover"
+                                      className="mb-3 h-16 w-full rounded-lg object-cover"
+                                    />
+                                  ) : card.coverColor ? (
                                     <div
                                       className="mb-3 h-10 w-full rounded-lg"
                                       style={{ backgroundColor: card.coverColor }}

@@ -137,9 +137,10 @@ export function NavbarBoardSearch() {
                   <span
                     className="h-6 w-9 rounded-sm border border-white/20"
                     style={{
-                      background:
-                        BOARD_PREVIEW_GRADIENTS[board.backgroundColor] ??
-                        BOARD_PREVIEW_GRADIENTS.ocean,
+                      background: board.backgroundImageUrl
+                        ? `center / cover no-repeat url("${board.backgroundImageUrl}")`
+                        : (BOARD_PREVIEW_GRADIENTS[board.backgroundColor] ??
+                          BOARD_PREVIEW_GRADIENTS.ocean),
                     }}
                   />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/90">

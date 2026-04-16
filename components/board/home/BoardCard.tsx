@@ -12,6 +12,7 @@ interface BoardCardData {
   id: string;
   title: string;
   backgroundColor: string;
+  backgroundImageUrl: string | null;
   isStarred: boolean;
   _count: {
     lists: number;
@@ -82,9 +83,10 @@ export function BoardCard({
         cardHeightClassName,
       )}
       style={{
-        background:
-          BOARD_PREVIEW_GRADIENTS[board.backgroundColor] ??
-          BOARD_PREVIEW_GRADIENTS.ocean,
+        background: board.backgroundImageUrl
+          ? `center / cover no-repeat url("${board.backgroundImageUrl}")`
+          : (BOARD_PREVIEW_GRADIENTS[board.backgroundColor] ??
+            BOARD_PREVIEW_GRADIENTS.ocean),
         color:
           board.backgroundColor === "snow"
             ? "var(--color-on-surface)"

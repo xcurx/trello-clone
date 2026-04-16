@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { boardService } from "@/lib/services/board.service";
+import { removeStorageObject } from "@/lib/storage/upload.service";
 import { updateBoardSchema } from "@/lib/validations/board.schema";
 import {
   success,
@@ -47,7 +48,26 @@ export async function PATCH(_request: NextRequest, { params }: Params) {
       );
     }
 
+    const existing = await boardService.getBackgroundImagePath(boardId);
+    if (!existing) return notFound("Board");
+
     const board = await boardService.update(boardId, parsed.data);
+
+    const nextBackgroundPath = parsed.data.backgroundImagePath;
+    const shouldCleanupOldPath =
+      parsed.data.backgroundImagePath !== undefined ||
+      parsed.data.backgroundImageUrl === null;
+
+    if (
+      shouldCleanupOldPath &&
+      existing.backgroundImagePath &&
+      existing.backgroundImagePath !== nextBackgroundPath
+    ) {
+      void removeStorageObject(existing.backgroundImagePath).catch((error) => {
+        console.error("Failed to remove previous board background image", error);
+      });
+    }
+
     return success(board);
   } catch (err) {
     return serverError(err);

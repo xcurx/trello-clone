@@ -24,6 +24,7 @@ export type WorkspaceCard = {
   dueDate: string | Date | null;
   isArchived: boolean;
   coverColor: string | null;
+  coverImageUrl?: string | null;
   labels: Array<{
     id: string;
     label: WorkspaceLabel;
@@ -52,6 +53,8 @@ export type WorkspaceBoard = {
   id: string;
   title: string;
   backgroundColor: string;
+  backgroundImageUrl?: string | null;
+  backgroundImagePath?: string | null;
   isStarred: boolean;
   labels: WorkspaceLabel[];
   members: WorkspaceMember[];
@@ -62,6 +65,7 @@ export type SwitchBoardItem = {
   id: string;
   title: string;
   backgroundColor: string;
+  backgroundImageUrl?: string | null;
   _count?: {
     lists?: number;
     members?: number;

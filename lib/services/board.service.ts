@@ -77,6 +77,13 @@ export const boardService = {
     });
   },
 
+  async getBackgroundImagePath(id: string) {
+    return prisma.board.findUnique({
+      where: { id },
+      select: { id: true, backgroundImagePath: true },
+    });
+  },
+
   async getArchivedItems(
     boardId: string,
     data?: { query?: string; type?: "cards" | "lists" | "all" },
@@ -189,7 +196,13 @@ export const boardService = {
 
   async update(
     id: string,
-    data: { title?: string; backgroundColor?: string; isStarred?: boolean },
+    data: {
+      title?: string;
+      backgroundColor?: string;
+      backgroundImageUrl?: string | null;
+      backgroundImagePath?: string | null;
+      isStarred?: boolean;
+    },
   ) {
     return prisma.board.update({
       where: { id },

@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { cardService } from "@/lib/services/card.service";
+import { removeStorageObject } from "@/lib/storage/upload.service";
 import { updateCardSchema } from "@/lib/validations/card.schema";
 import {
   success,
@@ -24,6 +25,9 @@ export async function GET(_request: NextRequest, { params }: Params) {
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
     const { cardId } = await params;
+    const existingCard = await cardService.getCoverImagePath(cardId);
+    if (!existingCard) return notFound("Card");
+
     const body = await request.json();
     const parsed = updateCardSchema.safeParse(body);
 
@@ -44,6 +48,22 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       cardId,
       updateData as Parameters<typeof cardService.update>[1],
     );
+
+    const nextCoverPath = parsed.data.coverImagePath;
+    const shouldCleanupOldPath =
+      parsed.data.coverImagePath !== undefined ||
+      parsed.data.coverImageUrl === null;
+
+    if (
+      shouldCleanupOldPath &&
+      existingCard.coverImagePath &&
+      existingCard.coverImagePath !== nextCoverPath
+    ) {
+      void removeStorageObject(existingCard.coverImagePath).catch((error) => {
+        console.error("Failed to remove previous card cover image", error);
+      });
+    }
+
     return success(card);
   } catch (err) {
     return serverError(err);

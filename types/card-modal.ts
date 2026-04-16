@@ -7,6 +7,8 @@ export interface CardModalState {
   dueDate: string | null;
   isArchived: boolean;
   coverColor: string | null;
+  coverImageUrl: string | null;
+  coverImagePath?: string | null;
   createdAt: string;
   updatedAt: string;
   labels: Array<{
@@ -46,6 +48,16 @@ export interface CardModalState {
       email: string;
       avatarUrl: string | null;
     };
+  }>;
+  attachments: Array<{
+    id: string;
+    cardId: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    fileUrl: string;
+    storagePath: string;
+    createdAt: string;
   }>;
   list: {
     id: string;
