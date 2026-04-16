@@ -1,9 +1,11 @@
 import { Clock, Star } from "lucide-react";
+import { connection } from "next/server";
 import { boardService } from "@/lib/services/board.service";
 import { BoardCard } from "@/components/board/home/BoardCard";
 import { CreateBoardTile } from "@/components/board/home/CreateBoardTile";
 
 export default async function DashboardPage() {
+  await connection();
   const boards = await boardService.getAll();
   const starredBoards = boards.filter((board) => board.isStarred);
   const recentBoards = boards.slice(0, 4);
