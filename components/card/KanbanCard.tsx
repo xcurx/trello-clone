@@ -91,6 +91,11 @@ function CardContent({ card }: { card: KanbanCardData }) {
     card.checklistItems?.length ?? card._count?.checklistItems ?? 0;
   const checklistDone = card.checklistDone ?? 0;
   const members = card.members?.map((entry) => entry.member) || [];
+  const hasFooterContent =
+    Boolean(card.description) ||
+    Boolean(card.dueDate) ||
+    checklistTotal > 0 ||
+    members.length > 0;
 
   return (
     <>
@@ -120,36 +125,43 @@ function CardContent({ card }: { card: KanbanCardData }) {
         </div>
       ) : null}
 
-      <h4 className="mb-3 whitespace-pre-wrap break-words text-left text-[14px] font-medium leading-[1.35] text-white/92">
+      <h4
+        className={cn(
+          "whitespace-pre-wrap break-words text-left text-[14px] font-medium leading-[1.35] text-white/92",
+          hasFooterContent && "mb-3",
+        )}
+      >
         {card.title}
       </h4>
 
-      <div className="flex items-end justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 text-white/52">
-          {card.description ? <AlignLeft className="h-3.5 w-3.5" /> : null}
-          {card.dueDate ? <Clock className="h-3.5 w-3.5" /> : null}
-          {checklistTotal > 0 ? (
-            <span className="inline-flex items-center gap-1 rounded-md bg-black/16 px-1.5 py-1 text-[11px] font-medium text-white/72">
-              <CheckSquare className="h-3.5 w-3.5" />
-              {checklistDone}/{checklistTotal}
-            </span>
+      {hasFooterContent ? (
+        <div className="flex items-end justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 text-white/52">
+            {card.description ? <AlignLeft className="h-3.5 w-3.5" /> : null}
+            {card.dueDate ? <Clock className="h-3.5 w-3.5" /> : null}
+            {checklistTotal > 0 ? (
+              <span className="inline-flex items-center gap-1 rounded-md bg-black/16 px-1.5 py-1 text-[11px] font-medium text-white/72">
+                <CheckSquare className="h-3.5 w-3.5" />
+                {checklistDone}/{checklistTotal}
+              </span>
+            ) : null}
+          </div>
+
+          {members.length > 0 ? (
+            <div className="flex items-center">
+              {members.slice(0, 3).map((member) => (
+                <Avatar
+                  key={member.id}
+                  src={member.avatarUrl}
+                  name={member.name}
+                  size="sm"
+                  className="-ml-1 border border-[#2b3036] first:ml-0"
+                />
+              ))}
+            </div>
           ) : null}
         </div>
-
-        {members.length > 0 ? (
-          <div className="flex items-center">
-            {members.slice(0, 3).map((member) => (
-              <Avatar
-                key={member.id}
-                src={member.avatarUrl}
-                name={member.name}
-                size="sm"
-                className="-ml-1 border border-[#2b3036] first:ml-0"
-              />
-            ))}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
     </>
   );
 }
