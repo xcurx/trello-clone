@@ -101,3 +101,24 @@ export async function patchBoardBackground(
 
   return payload.data?.backgroundColor ?? backgroundColor;
 }
+
+export async function patchBoardStarStatus(
+  boardId: string,
+  isStarred: boolean,
+) {
+  const response = await fetch(`/api/boards/${boardId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ isStarred }),
+  });
+
+  const payload = (await response.json()) as ApiResponse<{
+    isStarred?: boolean;
+  }>;
+
+  if (!response.ok || !payload.success) {
+    throw new Error(getErrorMessage(payload, "Failed to update board star"));
+  }
+
+  return payload.data?.isStarred ?? isStarred;
+}

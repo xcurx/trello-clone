@@ -52,6 +52,7 @@ export type WorkspaceBoard = {
   id: string;
   title: string;
   backgroundColor: string;
+  isStarred: boolean;
   labels: WorkspaceLabel[];
   members: WorkspaceMember[];
   lists: WorkspaceList[];

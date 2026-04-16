@@ -32,6 +32,7 @@ import {
   fetchArchivedItems,
   fetchSwitchBoards,
   patchBoardBackground,
+  patchBoardStarStatus,
   requestArchivedAction,
 } from "@/components/board/workspace/api";
 import {
@@ -99,6 +100,8 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   const [activeBoardBackground, setActiveBoardBackground] = useState(
     board.backgroundColor,
   );
+  const [isBoardStarred, setIsBoardStarred] = useState(board.isStarred);
+  const [isUpdatingBoardStar, setIsUpdatingBoardStar] = useState(false);
   const [isChangingBackground, setIsChangingBackground] = useState(false);
   const [backgroundChangeError, setBackgroundChangeError] = useState<
     string | null
@@ -164,6 +167,10 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
   useEffect(() => {
     setActiveBoardBackground(board.backgroundColor);
   }, [board.id, board.backgroundColor]);
+
+  useEffect(() => {
+    setIsBoardStarred(board.isStarred);
+  }, [board.id, board.isStarred]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -555,6 +562,30 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
     }
   };
 
+  const toggleBoardStar = async () => {
+    if (isUpdatingBoardStar) {
+      return;
+    }
+
+    const previousStarState = isBoardStarred;
+    const nextStarState = !previousStarState;
+
+    setIsBoardStarred(nextStarState);
+    setIsUpdatingBoardStar(true);
+
+    try {
+      const persistedStarState = await patchBoardStarStatus(
+        board.id,
+        nextStarState,
+      );
+      setIsBoardStarred(persistedStarState);
+    } catch {
+      setIsBoardStarred(previousStarState);
+    } finally {
+      setIsUpdatingBoardStar(false);
+    }
+  };
+
   const handleBoardMenuTrigger = () => {
     setBoardMenuView("menu");
     setBackgroundChangeError(null);
@@ -697,9 +728,26 @@ export function BoardWorkspace({ board }: BoardWorkspaceProps) {
               />
               <button
                 type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white max-[520px]:hidden"
+                onClick={() => {
+                  void toggleBoardStar();
+                }}
+                disabled={isUpdatingBoardStar}
+                aria-label={isBoardStarred ? "Unstar board" : "Star board"}
+                title={isBoardStarred ? "Starred" : "Star board"}
+                className={cn(
+                  "inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors max-[520px]:hidden",
+                  isBoardStarred
+                    ? "text-[#f5cd47] hover:bg-black/20"
+                    : "text-white/70 hover:bg-white/10 hover:text-white",
+                  isUpdatingBoardStar && "cursor-wait opacity-80",
+                )}
               >
-                <Star className="h-4 w-4" />
+                <Star
+                  className={cn(
+                    "h-4 w-4",
+                    isBoardStarred ? "fill-[#f5cd47]" : "fill-transparent",
+                  )}
+                />
               </button>
             </div>
 

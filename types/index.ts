@@ -8,6 +8,7 @@ export interface BoardSummary {
   id: string;
   title: string;
   backgroundColor: string;
+  isStarred: boolean;
   createdAt: string;
   updatedAt: string;
   _count: {
@@ -20,6 +21,7 @@ export interface BoardDetail {
   id: string;
   title: string;
   backgroundColor: string;
+  isStarred: boolean;
   createdAt: string;
   updatedAt: string;
   lists: ListWithCards[];

@@ -13,6 +13,31 @@ export const boardService = {
     });
   },
 
+  async search(query: string, limit = 8) {
+    const normalizedQuery = query.trim();
+    const normalizedLimit = Math.max(1, Math.min(limit, 20));
+
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    return prisma.board.findMany({
+      where: {
+        title: {
+          contains: normalizedQuery,
+          mode: "insensitive",
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: normalizedLimit,
+      include: {
+        _count: {
+          select: { lists: true, members: true },
+        },
+      },
+    });
+  },
+
   async getById(id: string) {
     return prisma.board.findUnique({
       where: { id },
@@ -162,7 +187,10 @@ export const boardService = {
     });
   },
 
-  async update(id: string, data: { title?: string; backgroundColor?: string }) {
+  async update(
+    id: string,
+    data: { title?: string; backgroundColor?: string; isStarred?: boolean },
+  ) {
     return prisma.board.update({
       where: { id },
       data,

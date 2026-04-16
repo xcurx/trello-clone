@@ -3,11 +3,12 @@
 import {
   Bell,
   CircleHelp,
-  LayoutGrid,
   Megaphone,
   MoreHorizontal,
   Search,
 } from "lucide-react";
+import { CreateBoardPopover } from "@/components/board/CreateBoardPopover";
+import { NavbarBoardSearch } from "@/components/layout/NavbarBoardSearch";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
 import { Popover } from "@/components/ui/Popover";
@@ -32,14 +33,7 @@ export function Navbar() {
       </Link>
 
       <div className="mx-auto flex max-w-[820px] flex-1 items-center justify-center gap-2 md:justify-start">
-        <div className="relative hidden flex-1 md:block">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45" />
-          <input
-            type="text"
-            placeholder="Search"
-            className="h-8 w-full rounded-md border border-white/16 bg-white/6 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-white/45 focus:border-white/26 focus:bg-white/10"
-          />
-        </div>
+        <NavbarBoardSearch />
 
         <button
           type="button"
@@ -49,12 +43,19 @@ export function Navbar() {
           <Search className="h-4 w-4" />
         </button>
 
-        <button
-          type="button"
-          className="inline-flex h-8 items-center rounded-md bg-[#579dff] px-3 text-sm font-medium text-[#082145] transition-colors hover:bg-[#85b8ff]"
-        >
-          Create
-        </button>
+        <CreateBoardPopover
+          side="bottom"
+          align="center"
+          contentClassName="border border-white/12 bg-[#2b2e38] text-white"
+          trigger={
+            <button
+              type="button"
+              className="inline-flex h-8 items-center rounded-md bg-[#579dff] px-3 text-sm font-medium text-[#082145] transition-colors hover:bg-[#85b8ff]"
+            >
+              Create
+            </button>
+          }
+        />
       </div>
 
       <div className="ml-auto hidden items-center gap-1 min-[820px]:flex">

@@ -8,4 +8,5 @@ export const createBoardSchema = z.object({
 export const updateBoardSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   backgroundColor: z.string().optional(),
+  isStarred: z.boolean().optional(),
 });
