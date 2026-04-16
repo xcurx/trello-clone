@@ -42,6 +42,7 @@ export interface ListColumnData {
 export interface ListColumnProps {
   list: ListColumnData;
   onRequestCopyList?: (listId: string, title: string) => void;
+  onCreateCard?: (listId: string, title: string) => Promise<void> | void;
   onListPatched?: (
     listId: string,
     patch: { title?: string; color?: string | null; isArchived?: boolean },

@@ -28,6 +28,7 @@ import {
   persistCardMove,
   persistCardsReorder,
 } from "@/components/board/kanban-board/api";
+import { createCardInList } from "@/components/board/list-column/api";
 import { useHorizontalDragScroll } from "@/components/board/hooks/useHorizontalDragScroll";
 import { EditableText } from "@/components/ui/EditableText";
 import {
@@ -36,6 +37,10 @@ import {
 import type { BoardCard, BoardList, KanbanBoardProps } from "@/types/kanban-board";
 import { KanbanCard } from "../card/KanbanCard";
 import { ListColumn } from "./ListColumn";
+
+function createOptimisticId(prefix: "temp-list" | "temp-card") {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 export function KanbanBoard({
   board: initialBoard,
@@ -53,33 +58,178 @@ export function KanbanBoard({
   const boardCanvasRef = useHorizontalDragScroll<HTMLDivElement>();
 
   const handleAddList = async () => {
-    if (!newListTitle.trim()) {
+    const title = newListTitle.trim();
+    const sourceListId = copySourceListId;
+
+    setNewListTitle("");
+    setIsAddingList(false);
+    setCopySourceListId(null);
+
+    if (!title) {
       setIsAddingList(false);
       setCopySourceListId(null);
       return;
     }
 
-    const title = newListTitle.trim();
+    const optimisticListId = createOptimisticId("temp-list");
+    const optimisticList: BoardList = {
+      id: optimisticListId,
+      boardId: board.id,
+      title,
+      color: null,
+      position: boardRef.current.lists.length,
+      cards: [],
+    };
+
+    const requestedPosition = boardRef.current.lists.length * 1024;
+
+    setBoard((current) => {
+      const nextBoard = {
+        ...current,
+        lists: [...current.lists, optimisticList],
+      };
+      boardRef.current = nextBoard;
+      return nextBoard;
+    });
 
     try {
       const nextList = await createOrCopyList({
         boardId: board.id,
         title,
-        position: board.lists.length * 1024,
-        copySourceListId,
+        position: requestedPosition,
+        copySourceListId: sourceListId,
       });
 
-      setBoard((current) => ({
-        ...current,
-        lists: [...current.lists, nextList],
-      }));
+      setBoard((current) => {
+        const nextBoard = {
+          ...current,
+          lists: current.lists.map((list) =>
+            list.id === optimisticListId ? nextList : list,
+          ),
+        };
+        boardRef.current = nextBoard;
+        return nextBoard;
+      });
     } catch (e) {
       console.error(e);
-    }
 
-    setNewListTitle("");
-    setIsAddingList(false);
-    setCopySourceListId(null);
+      setBoard((current) => {
+        const nextBoard = {
+          ...current,
+          lists: current.lists.filter((list) => list.id !== optimisticListId),
+        };
+        boardRef.current = nextBoard;
+        return nextBoard;
+      });
+    }
+  };
+
+  const handleCreateCard = async (listId: string, title: string) => {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) return;
+
+    const sourceList = boardRef.current.lists.find((list) => list.id === listId);
+    if (!sourceList) return;
+
+    const optimisticCardId = createOptimisticId("temp-card");
+    const optimisticCard: BoardCard = {
+      id: optimisticCardId,
+      listId,
+      title: trimmedTitle,
+      description: null,
+      position: sourceList.cards.length,
+      dueDate: null,
+      isArchived: false,
+      coverColor: null,
+      labels: [],
+      members: [],
+      _count: {
+        checklistItems: 0,
+        comments: 0,
+      },
+      checklistDone: 0,
+    };
+
+    const requestedPosition = sourceList.cards.length * 1024;
+
+    setBoard((current) => {
+      const nextBoard = {
+        ...current,
+        lists: current.lists.map((list) =>
+          list.id === listId
+            ? {
+                ...list,
+                cards: [...list.cards, optimisticCard],
+              }
+            : list,
+        ),
+      };
+      boardRef.current = nextBoard;
+      return nextBoard;
+    });
+
+    try {
+      const createdCard = await createCardInList(
+        listId,
+        trimmedTitle,
+        requestedPosition,
+      );
+
+      const normalizedCard: BoardCard = {
+        id: createdCard.id,
+        listId: createdCard.listId ?? listId,
+        title: createdCard.title,
+        description: createdCard.description ?? null,
+        position: createdCard.position ?? sourceList.cards.length,
+        dueDate: createdCard.dueDate ?? null,
+        isArchived: createdCard.isArchived ?? false,
+        coverColor: createdCard.coverColor ?? null,
+        coverImageUrl: createdCard.coverImageUrl ?? null,
+        labels: createdCard.labels ?? [],
+        members: createdCard.members ?? [],
+        _count: {
+          checklistItems: createdCard._count?.checklistItems ?? 0,
+          comments: createdCard._count?.comments ?? 0,
+        },
+        checklistDone: createdCard.checklistDone ?? 0,
+      };
+
+      setBoard((current) => {
+        const nextBoard = {
+          ...current,
+          lists: current.lists.map((list) =>
+            list.id === listId
+              ? {
+                  ...list,
+                  cards: list.cards.map((card) =>
+                    card.id === optimisticCardId ? normalizedCard : card,
+                  ),
+                }
+              : list,
+          ),
+        };
+        boardRef.current = nextBoard;
+        return nextBoard;
+      });
+    } catch (error) {
+      console.error(error);
+
+      setBoard((current) => {
+        const nextBoard = {
+          ...current,
+          lists: current.lists.map((list) =>
+            list.id === listId
+              ? {
+                  ...list,
+                  cards: list.cards.filter((card) => card.id !== optimisticCardId),
+                }
+              : list,
+          ),
+        };
+        boardRef.current = nextBoard;
+        return nextBoard;
+      });
+    }
   };
 
   const requestCopyList = (listId: string, title: string) => {
@@ -219,6 +369,7 @@ export function KanbanBoard({
                   key={list.id}
                   list={list}
                   onRequestCopyList={requestCopyList}
+                  onCreateCard={handleCreateCard}
                   onListPatched={patchListInBoard}
                 />
               ))}

@@ -38,6 +38,7 @@ import { KanbanCard } from "../card/KanbanCard";
 export function ListColumn({
   list,
   onRequestCopyList,
+  onCreateCard,
   onListPatched,
   isOverlay = false,
 }: ListColumnProps) {
@@ -49,6 +50,7 @@ export function ListColumn({
     <SortableListColumn
       list={list}
       onRequestCopyList={onRequestCopyList}
+      onCreateCard={onCreateCard}
       onListPatched={onListPatched}
     />
   );
@@ -57,10 +59,12 @@ export function ListColumn({
 function SortableListColumn({
   list,
   onRequestCopyList,
+  onCreateCard,
   onListPatched,
 }: {
   list: ListColumnProps["list"];
   onRequestCopyList?: ListColumnProps["onRequestCopyList"];
+  onCreateCard?: ListColumnProps["onCreateCard"];
   onListPatched?: ListColumnProps["onListPatched"];
 }) {
   const cardsIds = useMemo(
@@ -333,23 +337,31 @@ function SortableListColumn({
   }, [moveCardsPositionCount]);
 
   const handleAddCard = async () => {
-    if (!newCardTitle.trim()) {
+    const title = newCardTitle.trim();
+
+    setNewCardTitle("");
+    setIsAddingCard(false);
+
+    if (!title) {
       setIsAddingCard(false);
       return;
     }
 
-    const title = newCardTitle.trim();
-
     try {
-      const newCard = await createCardInList(list.id, title, list.cards.length * 1024);
-      list.cards.push(newCard);
-      router.refresh();
+      if (onCreateCard) {
+        await onCreateCard(list.id, title);
+      } else {
+        const newCard = await createCardInList(
+          list.id,
+          title,
+          list.cards.length * 1024,
+        );
+        list.cards.push(newCard);
+        router.refresh();
+      }
     } catch (error) {
       console.error(error);
     }
-
-    setNewCardTitle("");
-    setIsAddingCard(false);
   };
 
   const openAddCardComposer = () => {

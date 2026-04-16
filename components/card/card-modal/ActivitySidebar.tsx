@@ -20,7 +20,7 @@ export function ActivitySidebar({
   onAddComment,
 }: ActivitySidebarProps) {
   return (
-    <aside className="border-t border-white/10 bg-[#1f2229]/70 px-5 pb-6 pt-5 lg:border-l lg:border-t-0">
+    <aside className="flex min-h-0 flex-col border-t border-white/10 bg-[#1f2229]/70 px-5 pb-6 pt-5 lg:border-l lg:border-t-0">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-white/82" />
@@ -53,7 +53,7 @@ export function ActivitySidebar({
         />
       </div>
 
-      <div className="space-y-4 overflow-y-auto pr-1">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
         {card.comments.map((comment) => (
           <div key={comment.id} className="flex gap-3">
             <Avatar

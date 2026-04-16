@@ -45,6 +45,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Dialog } from "@/components/ui/Dialog";
 import { EditableText } from "@/components/ui/EditableText";
 import { Popover } from "@/components/ui/Popover";
+import { DEFAULT_USER_ID } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type { CardDetail, LabelData, MemberData } from "@/types";
 import type { CardModalState } from "@/types/card-modal";
@@ -57,6 +58,10 @@ function formatBytes(sizeBytes: number) {
   }
 
   return `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function createTempId(prefix: "member" | "label" | "checklist" | "comment") {
+  return `temp-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function CardModal() {
@@ -161,6 +166,28 @@ export function CardModal() {
     });
   }, [boardLabels, labelQuery]);
 
+  const dueDateDetails = useMemo(() => {
+    if (!card?.dueDate) return null;
+
+    const dueDate = new Date(card.dueDate);
+    if (Number.isNaN(dueDate.getTime())) return null;
+
+    const now = Date.now();
+    const diffMs = dueDate.getTime() - now;
+    const isOverdue = diffMs < 0;
+    const isDueSoon = !isOverdue && diffMs <= 24 * 60 * 60 * 1000;
+
+    return {
+      formatted: format(dueDate, "d MMM, HH:mm"),
+      status: isOverdue ? "Overdue" : isDueSoon ? "Due soon" : null,
+      statusClassName: isOverdue
+        ? "bg-[#ff6a66] text-[#1a0a0a]"
+        : isDueSoon
+          ? "bg-[#ffd84d] text-[#1b1700]"
+          : null,
+    };
+  }, [card?.dueDate]);
+
   if (!cardId || isClosing) return null;
 
   const saveCardPatch = async (patch: Partial<CardDetail>) => {
@@ -188,10 +215,9 @@ export function CardModal() {
     if (!card) return;
 
     const isAssigned = selectedMemberIds.has(member.id);
+    const previousMembers = card.members;
 
     if (isAssigned) {
-      await removeCardMember(card.id, member.id);
-
       setCard((current) =>
         current
           ? {
@@ -202,17 +228,56 @@ export function CardModal() {
             }
           : current,
       );
+
+      try {
+        await removeCardMember(card.id, member.id);
+      } catch (error) {
+        setCard((current) =>
+          current
+            ? {
+                ...current,
+                members: previousMembers,
+              }
+            : current,
+        );
+        throw error;
+      }
     } else {
-      const createdMember = await addCardMember(card.id, member.id);
+      const optimisticMemberId = createTempId("member");
 
       setCard((current) =>
         current
           ? {
               ...current,
-              members: [...current.members, createdMember],
+              members: [...current.members, { id: optimisticMemberId, member }],
             }
           : current,
       );
+
+      try {
+        const createdMember = await addCardMember(card.id, member.id);
+
+        setCard((current) =>
+          current
+            ? {
+                ...current,
+                members: current.members.map((entry) =>
+                  entry.id === optimisticMemberId ? createdMember : entry,
+                ),
+              }
+            : current,
+        );
+      } catch (error) {
+        setCard((current) =>
+          current
+            ? {
+                ...current,
+                members: previousMembers,
+              }
+            : current,
+        );
+        throw error;
+      }
     }
 
     refreshBoard();
@@ -222,10 +287,9 @@ export function CardModal() {
     if (!card) return;
 
     const isSelected = selectedLabelIds.has(label.id);
+    const previousLabels = card.labels;
 
     if (isSelected) {
-      await removeCardLabel(card.id, label.id);
-
       setCard((current) =>
         current
           ? {
@@ -236,17 +300,56 @@ export function CardModal() {
             }
           : current,
       );
+
+      try {
+        await removeCardLabel(card.id, label.id);
+      } catch (error) {
+        setCard((current) =>
+          current
+            ? {
+                ...current,
+                labels: previousLabels,
+              }
+            : current,
+        );
+        throw error;
+      }
     } else {
-      const createdLabel = await addCardLabel(card.id, label.id);
+      const optimisticLabelId = createTempId("label");
 
       setCard((current) =>
         current
           ? {
               ...current,
-              labels: [...current.labels, createdLabel],
+              labels: [...current.labels, { id: optimisticLabelId, label }],
             }
           : current,
       );
+
+      try {
+        const createdLabel = await addCardLabel(card.id, label.id);
+
+        setCard((current) =>
+          current
+            ? {
+                ...current,
+                labels: current.labels.map((entry) =>
+                  entry.id === optimisticLabelId ? createdLabel : entry,
+                ),
+              }
+            : current,
+        );
+      } catch (error) {
+        setCard((current) =>
+          current
+            ? {
+                ...current,
+                labels: previousLabels,
+              }
+            : current,
+        );
+        throw error;
+      }
     }
 
     refreshBoard();
@@ -255,43 +358,128 @@ export function CardModal() {
   const handleAddChecklistItem = async () => {
     if (!card || !newChecklistTitle.trim()) return;
 
-    const item = await createChecklistItem(card.id, newChecklistTitle.trim());
+    const title = newChecklistTitle.trim();
+    const previousTitleValue = newChecklistTitle;
+    const optimisticItemId = createTempId("checklist");
+    const nextPosition =
+      card.checklistItems.length > 0
+        ? Math.max(...card.checklistItems.map((item) => item.position)) + 1
+        : 0;
+
+    setNewChecklistTitle("");
 
     setCard((current) =>
       current
         ? {
             ...current,
-            checklistItems: [...current.checklistItems, item].sort(
-              (left, right) => left.position - right.position,
-            ),
+            checklistItems: [
+              ...current.checklistItems,
+              {
+                id: optimisticItemId,
+                cardId: current.id,
+                title,
+                isCompleted: false,
+                position: nextPosition,
+              },
+            ].sort((left, right) => left.position - right.position),
           }
         : current,
     );
-    setNewChecklistTitle("");
-    refreshBoard();
+
+    try {
+      const item = await createChecklistItem(card.id, title);
+
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              checklistItems: current.checklistItems
+                .map((entry) => (entry.id === optimisticItemId ? item : entry))
+                .sort((left, right) => left.position - right.position),
+            }
+          : current,
+      );
+      refreshBoard();
+    } catch (error) {
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              checklistItems: current.checklistItems.filter(
+                (item) => item.id !== optimisticItemId,
+              ),
+            }
+          : current,
+      );
+      setNewChecklistTitle(previousTitleValue);
+      throw error;
+    }
   };
 
   const handleToggleChecklistItem = async (
     itemId: string,
     isCompleted: boolean,
   ) => {
-    const updatedItem = await patchChecklistItem(itemId, isCompleted);
+    if (!card) return;
+
+    const previousItem = card.checklistItems.find((item) => item.id === itemId);
+    if (!previousItem) return;
 
     setCard((current) =>
       current
         ? {
             ...current,
             checklistItems: current.checklistItems.map((item) =>
-              item.id === itemId ? updatedItem : item,
+              item.id === itemId
+                ? {
+                    ...item,
+                    isCompleted,
+                  }
+                : item,
             ),
           }
         : current,
     );
-    refreshBoard();
+
+    try {
+      const updatedItem = await patchChecklistItem(itemId, isCompleted);
+
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              checklistItems: current.checklistItems.map((item) =>
+                item.id === itemId ? updatedItem : item,
+              ),
+            }
+          : current,
+      );
+      refreshBoard();
+    } catch (error) {
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              checklistItems: current.checklistItems.map((item) =>
+                item.id === itemId
+                  ? {
+                      ...item,
+                      isCompleted: previousItem.isCompleted,
+                    }
+                  : item,
+              ),
+            }
+          : current,
+      );
+      throw error;
+    }
   };
 
   const handleDeleteChecklistItem = async (itemId: string) => {
-    await deleteChecklistItem(itemId);
+    if (!card) return;
+
+    const removedItem = card.checklistItems.find((item) => item.id === itemId);
+    if (!removedItem) return;
 
     setCard((current) =>
       current
@@ -303,7 +491,23 @@ export function CardModal() {
           }
         : current,
     );
-    refreshBoard();
+
+    try {
+      await deleteChecklistItem(itemId);
+      refreshBoard();
+    } catch (error) {
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              checklistItems: [...current.checklistItems, removedItem].sort(
+                (left, right) => left.position - right.position,
+              ),
+            }
+          : current,
+      );
+      throw error;
+    }
   };
 
   const handleSaveDueDate = async () => {
@@ -313,56 +517,242 @@ export function CardModal() {
     await saveCardPatch({ dueDate: nextDueDate });
   };
 
+  const handleClearDueDate = async () => {
+    setDueDateValue("");
+    await saveCardPatch({ dueDate: null });
+  };
+
   const handleSetCoverColor = async (color: string) => {
     if (!card || card.coverColor === color) return;
-    await saveCardPatch({
-      coverColor: color,
-      coverImageUrl: null,
-      coverImagePath: null,
-    });
+
+    const previousCover = {
+      coverColor: card.coverColor,
+      coverImageUrl: card.coverImageUrl,
+      coverImagePath: card.coverImagePath ?? null,
+    };
+
+    setCard((current) =>
+      current
+        ? {
+            ...current,
+            coverColor: color,
+            coverImageUrl: null,
+            coverImagePath: null,
+          }
+        : current,
+    );
+
+    try {
+      const updatedCard = await patchCardDetails(card.id, {
+        coverColor: color,
+        coverImageUrl: null,
+        coverImagePath: null,
+      });
+
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              ...updatedCard,
+            }
+          : current,
+      );
+      refreshBoard();
+    } catch (error) {
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              ...previousCover,
+            }
+          : current,
+      );
+      throw error;
+    }
   };
 
   const handleUploadCoverImage = async (file: File) => {
     if (!card || isUploadingCoverImage) return;
 
+    const previousCover = {
+      coverColor: card.coverColor,
+      coverImageUrl: card.coverImageUrl,
+      coverImagePath: card.coverImagePath ?? null,
+    };
+
+    const optimisticPreviewUrl = URL.createObjectURL(file);
+
     setIsUploadingCoverImage(true);
+    setCard((current) =>
+      current
+        ? {
+            ...current,
+            coverColor: null,
+            coverImageUrl: optimisticPreviewUrl,
+            coverImagePath: null,
+          }
+        : current,
+    );
 
     try {
       const uploaded = await uploadCardCoverImage(card.id, file);
-      await saveCardPatch({
+
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              coverColor: null,
+              coverImageUrl: uploaded.fileUrl,
+              coverImagePath: uploaded.storagePath,
+            }
+          : current,
+      );
+
+      const updatedCard = await patchCardDetails(card.id, {
         coverImageUrl: uploaded.fileUrl,
         coverImagePath: uploaded.storagePath,
         coverColor: null,
       });
+
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              ...updatedCard,
+            }
+          : current,
+      );
+      refreshBoard();
+    } catch (error) {
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              ...previousCover,
+            }
+          : current,
+      );
+      throw error;
     } finally {
+      URL.revokeObjectURL(optimisticPreviewUrl);
       setIsUploadingCoverImage(false);
     }
   };
 
   const handleRemoveCover = async () => {
     if (!card || (!card.coverColor && !card.coverImageUrl)) return;
-    await saveCardPatch({
-      coverColor: null,
-      coverImageUrl: null,
-      coverImagePath: null,
-    });
-  };
 
-  const handleAddComment = async () => {
-    if (!card || !newComment.trim()) return;
-
-    const createdComment = await createCardComment(card.id, newComment.trim());
+    const previousCover = {
+      coverColor: card.coverColor,
+      coverImageUrl: card.coverImageUrl,
+      coverImagePath: card.coverImagePath ?? null,
+    };
 
     setCard((current) =>
       current
         ? {
             ...current,
-            comments: [createdComment, ...current.comments],
+            coverColor: null,
+            coverImageUrl: null,
+            coverImagePath: null,
           }
         : current,
     );
+
+    try {
+      const updatedCard = await patchCardDetails(card.id, {
+        coverColor: null,
+        coverImageUrl: null,
+        coverImagePath: null,
+      });
+
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              ...updatedCard,
+            }
+          : current,
+      );
+      refreshBoard();
+    } catch (error) {
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              ...previousCover,
+            }
+          : current,
+      );
+      throw error;
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!card || !newComment.trim()) return;
+
+    const content = newComment.trim();
+    const optimisticCommentId = createTempId("comment");
+    const nowIso = new Date().toISOString();
+    const optimisticAuthor =
+      allMembers.find((member) => member.id === DEFAULT_USER_ID) ??
+      allMembers[0] ??
+      card.members[0]?.member ?? {
+        id: DEFAULT_USER_ID,
+        name: "You",
+        email: "",
+        avatarUrl: null,
+      };
+
     setNewComment("");
-    refreshBoard();
+
+    setCard((current) =>
+      current
+        ? {
+            ...current,
+            comments: [
+              {
+                id: optimisticCommentId,
+                cardId: current.id,
+                content,
+                createdAt: nowIso,
+                updatedAt: nowIso,
+                member: optimisticAuthor,
+              },
+              ...current.comments,
+            ],
+          }
+        : current,
+    );
+
+    try {
+      const createdComment = await createCardComment(card.id, content);
+
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              comments: current.comments.map((comment) =>
+                comment.id === optimisticCommentId ? createdComment : comment,
+              ),
+            }
+          : current,
+      );
+      refreshBoard();
+    } catch (error) {
+      setCard((current) =>
+        current
+          ? {
+              ...current,
+              comments: current.comments.filter(
+                (comment) => comment.id !== optimisticCommentId,
+              ),
+            }
+          : current,
+      );
+      setNewComment(content);
+      throw error;
+    }
   };
 
   const handleUploadAttachment = async (file: File) => {
@@ -417,19 +807,46 @@ export function CardModal() {
   const actionChipClass =
     "inline-flex h-9 items-center gap-2 rounded-md border border-white/12 bg-white/5 px-3 text-sm font-medium text-white/82 transition-colors hover:bg-white/10";
 
+  const renderDueDatePopoverContent = () => (
+    <div className="space-y-3">
+      <input
+        type="datetime-local"
+        className="w-full rounded-sm border-2 border-primary bg-surface p-1.5 text-sm outline-none"
+        value={dueDateValue}
+        onChange={(event) => setDueDateValue(event.target.value)}
+      />
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => handleSaveDueDate().catch(console.error)}
+          className="flex-1 rounded-sm bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={() => handleClearDueDate().catch(console.error)}
+          className="flex-1 rounded-sm bg-surface-container px-3 py-1.5 text-sm font-medium text-on-surface transition-colors hover:bg-surface-container-high"
+        >
+          Clear
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <Dialog
       isOpen={!!cardId}
       onClose={handleClose}
-      className="max-w-[1080px] overflow-hidden bg-[#252a33] p-0 text-white"
+      className="self-center flex max-h-[calc(100vh-120px)] max-w-[1080px] flex-col overflow-visible bg-[#252a33] p-0 text-white"
     >
       {loading ? (
         <div className="p-10 text-center text-white/62">
           Loading...
         </div>
       ) : card ? (
-        <div className="relative">
-          <div className="overflow-hidden">
+        <div className="relative flex min-h-0 flex-1 flex-col pb-9">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-xl">
             {card.coverImageUrl ? (
               <img
                 src={card.coverImageUrl}
@@ -528,11 +945,11 @@ export function CardModal() {
 
             <div
               className={cn(
-                "grid min-h-[520px] grid-cols-1",
+                "grid min-h-0 flex-1 grid-cols-1",
                 isActivityVisible && "lg:grid-cols-[minmax(0,1fr)_460px]",
               )}
             >
-              <div className="space-y-7 px-6 pb-6 pt-5">
+              <div className="min-h-0 space-y-7 overflow-y-auto px-6 pb-6 pt-5">
                 <div className="flex items-start gap-3">
                   <CheckCircle2 className="mt-1 h-6 w-6 shrink-0 text-[#8bc34a]" />
                   <div className="min-w-0 flex-1">
@@ -625,33 +1042,7 @@ export function CardModal() {
                   side="bottom"
                   align="start"
                 >
-                  <div className="space-y-3">
-                    <input
-                      type="datetime-local"
-                      className="w-full rounded-sm border-2 border-primary bg-surface p-1.5 text-sm outline-none"
-                      value={dueDateValue}
-                      onChange={(event) => setDueDateValue(event.target.value)}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSaveDueDate().catch(console.error)}
-                        className="flex-1 rounded-sm bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary/90"
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDueDateValue("");
-                          saveCardPatch({ dueDate: null }).catch(console.error);
-                        }}
-                        className="flex-1 rounded-sm bg-surface-container px-3 py-1.5 text-sm font-medium text-on-surface transition-colors hover:bg-surface-container-high"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
+                  {renderDueDatePopoverContent()}
                 </Popover>
 
                 <Popover
@@ -746,6 +1137,39 @@ export function CardModal() {
                   </div>
                 </Popover>
                 </div>
+
+                {dueDateDetails ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-white/72">Due date</p>
+
+                    <Popover
+                      trigger={
+                        <button
+                          type="button"
+                          className="inline-flex h-10 items-center gap-2 rounded-md bg-white/8 px-3 text-sm text-white/90 transition-colors hover:bg-white/12"
+                        >
+                          <span>{dueDateDetails.formatted}</span>
+                          {dueDateDetails.status ? (
+                            <span
+                              className={cn(
+                                "rounded px-1.5 py-0.5 text-xs font-semibold",
+                                dueDateDetails.statusClassName,
+                              )}
+                            >
+                              {dueDateDetails.status}
+                            </span>
+                          ) : null}
+                          <ChevronDown className="h-4 w-4 text-white/62" />
+                        </button>
+                      }
+                      title="Dates"
+                      side="bottom"
+                      align="start"
+                    >
+                      {renderDueDatePopoverContent()}
+                    </Popover>
+                  </div>
+                ) : null}
 
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-white/84">
@@ -972,8 +1396,8 @@ export function CardModal() {
             <div className="h-px w-full bg-white/10" />
           </div>
 
-          <div className="flex justify-center px-4 py-3">
-            <div className="inline-flex items-center overflow-hidden rounded-2xl border border-white/12 bg-[#1d2127] p-1 text-sm font-medium text-white/72 shadow-[0_10px_26px_rgba(0,0,0,0.35)]">
+          <div className="pointer-events-none absolute bottom-0 left-1/2 z-10 -translate-x-1/2 translate-y-1/2">
+            <div className="pointer-events-auto inline-flex items-center overflow-hidden rounded-2xl border border-white/12 bg-[#1d2127] p-1 text-sm font-medium text-white/72 shadow-[0_10px_26px_rgba(0,0,0,0.35)]">
               <button
                 type="button"
                 onClick={() => setIsActivityVisible((current) => !current)}

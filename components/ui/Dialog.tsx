@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createPortal } from "react-dom";
@@ -13,7 +13,15 @@ interface DialogProps {
 }
 
 export function Dialog({ isOpen, onClose, children, className }: DialogProps) {
+  const [isMounted, setIsMounted] = useState(false);
+
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
     if (isOpen) {
       document.body.style.overflow = "hidden";
     } else {
@@ -22,9 +30,9 @@ export function Dialog({ isOpen, onClose, children, className }: DialogProps) {
     return () => {
       document.body.style.overflow = "unset";
     };
-  }, [isOpen]);
+  }, [isMounted, isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !isMounted || typeof document === "undefined") return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50">
