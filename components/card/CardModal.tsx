@@ -807,6 +807,86 @@ export function CardModal() {
   const actionChipClass =
     "inline-flex h-9 items-center gap-2 rounded-md border border-white/12 bg-white/5 px-3 text-sm font-medium text-white/82 transition-colors hover:bg-white/10";
 
+  const hasCover = Boolean(card?.coverImageUrl || card?.coverColor);
+
+  const renderCardHeaderToolbar = (className?: string) => (
+    <div className={cn("flex h-14 items-center justify-between px-4", className)}>
+      <button
+        type="button"
+        className="inline-flex h-8 items-center gap-1 rounded-md bg-[#1f7a52] px-3 text-sm font-semibold text-white"
+      >
+        {card?.list.title}
+        <ChevronDown className="h-4 w-4" />
+      </button>
+
+      <div className="flex items-center gap-1 pr-9">
+        <Popover
+          trigger={
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Card cover"
+            >
+              <ImageIcon className="h-4 w-4" />
+            </button>
+          }
+          title="Cover"
+          side="bottom"
+          align="end"
+          contentClassName="w-[300px] border-white/10 bg-[#2b2e38] text-white"
+        >
+          <CoverPopoverContent
+            selectedColor={card?.coverColor ?? null}
+            selectedImageUrl={card?.coverImageUrl ?? null}
+            isUploadingImage={isUploadingCoverImage}
+            onSelectColor={(color) => {
+              handleSetCoverColor(color).catch(console.error);
+            }}
+            onUploadImage={(file) => {
+              handleUploadCoverImage(file).catch(console.error);
+            }}
+            onRemoveCover={() => {
+              handleRemoveCover().catch(console.error);
+            }}
+          />
+        </Popover>
+        <button
+          type="button"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+          aria-label="Watch card"
+        >
+          <Eye className="h-4 w-4" />
+        </button>
+
+        <Popover
+          trigger={
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="More"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          }
+          title="Actions"
+          side="bottom"
+          align="end"
+          contentClassName="w-44 bg-[#2b2e38] text-white border-white/10"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              handleToggleCardArchivedState().catch(console.error);
+            }}
+            className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-white/86 transition-colors hover:bg-white/8"
+          >
+            {card?.isArchived ? "Restore" : "Archive"}
+          </button>
+        </Popover>
+      </div>
+    </div>
+  );
+
   const renderDueDatePopoverContent = () => (
     <div className="space-y-3">
       <input
@@ -838,103 +918,43 @@ export function CardModal() {
     <Dialog
       isOpen={!!cardId}
       onClose={handleClose}
-      className="self-center flex max-h-[calc(100vh-120px)] max-w-[1080px] flex-col overflow-visible bg-[#252a33] p-0 text-white"
+      className="self-center mt-[-70] flex max-h-[calc(100vh-200px)] w-full max-w-[1080px] flex-col overflow-visible bg-[#252a33] p-0 text-white"
     >
       {loading ? (
         <div className="p-10 text-center text-white/62">
           Loading...
         </div>
       ) : card ? (
-        <div className="relative flex min-h-0 flex-1 flex-col pb-9">
+        <div className="relative flex min-h-0 flex-1 flex-col rounded-t-xl">
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-xl">
-            {card.coverImageUrl ? (
-              <img
-                src={card.coverImageUrl}
-                alt="Card cover"
-                className="h-24 w-full object-cover sm:h-28"
-              />
-            ) : card.coverColor ? (
-              <div
-                className="h-24 w-full sm:h-28"
-                style={{ backgroundColor: card.coverColor }}
-              />
-            ) : null}
+            {hasCover ? (
+              <>
+                <div className="relative">
+                  {card.coverImageUrl ? (
+                    <img
+                      src={card.coverImageUrl}
+                      alt="Card cover"
+                      className="h-[120px] w-full object-cover sm:h-28"
+                    />
+                  ) : (
+                    <div
+                      className="h-[120px] w-full sm:h-28"
+                      style={{ backgroundColor: card.coverColor ?? undefined }}
+                    />
+                  )}
 
-            <div className="flex h-14 items-center justify-between border-b border-white/10 bg-black/14 px-4">
-              <button
-                type="button"
-                className="inline-flex h-8 items-center gap-1 rounded-md bg-[#1f7a52] px-3 text-sm font-semibold text-white"
-              >
-                {card.list.title}
-                <ChevronDown className="h-4 w-4" />
-              </button>
+                  <div className="absolute inset-x-0 top-0 sm:hidden">
+                    {renderCardHeaderToolbar("bg-transparent")}
+                  </div>
+                </div>
 
-              <div className="flex items-center gap-1 pr-9">
-                <Popover
-                  trigger={
-                    <button
-                      type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
-                      aria-label="Card cover"
-                    >
-                      <ImageIcon className="h-4 w-4" />
-                    </button>
-                  }
-                  title="Cover"
-                  side="bottom"
-                  align="end"
-                  contentClassName="w-[300px] border-white/10 bg-[#2b2e38] text-white"
-                >
-                  <CoverPopoverContent
-                    selectedColor={card.coverColor}
-                    selectedImageUrl={card.coverImageUrl}
-                    isUploadingImage={isUploadingCoverImage}
-                    onSelectColor={(color) => {
-                      handleSetCoverColor(color).catch(console.error);
-                    }}
-                    onUploadImage={(file) => {
-                      handleUploadCoverImage(file).catch(console.error);
-                    }}
-                    onRemoveCover={() => {
-                      handleRemoveCover().catch(console.error);
-                    }}
-                  />
-                </Popover>
-                <button
-                  type="button"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
-                  aria-label="Watch card"
-                >
-                  <Eye className="h-4 w-4" />
-                </button>
-
-                <Popover
-                  trigger={
-                    <button
-                      type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/72 transition-colors hover:bg-white/10 hover:text-white"
-                      aria-label="More"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
-                  }
-                  title="Actions"
-                  side="bottom"
-                  align="end"
-                  contentClassName="w-44 bg-[#2b2e38] text-white border-white/10"
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleToggleCardArchivedState().catch(console.error);
-                    }}
-                    className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-white/86 transition-colors hover:bg-white/8"
-                  >
-                    {card.isArchived ? "Restore" : "Archive"}
-                  </button>
-                </Popover>
-              </div>
-            </div>
+                <div className="hidden sm:block">
+                  {renderCardHeaderToolbar("border-b border-white/10 bg-black/14")}
+                </div>
+              </>
+            ) : (
+              renderCardHeaderToolbar("border-b border-white/10 bg-black/14")
+            )}
 
             {card.isArchived ? (
               <div className="flex items-center gap-2 border-b border-white/10 bg-white/14 px-4 py-2 text-sm text-white/84">
@@ -1396,7 +1416,7 @@ export function CardModal() {
             <div className="h-px w-full bg-white/10" />
           </div>
 
-          <div className="pointer-events-none absolute bottom-0 left-1/2 z-10 -translate-x-1/2 translate-y-1/2">
+          <div className="pointer-events-none absolute bottom-[-30] left-1/2 z-10 -translate-x-1/2 translate-y-1/2">
             <div className="pointer-events-auto inline-flex items-center overflow-hidden rounded-2xl border border-white/12 bg-[#1d2127] p-1 text-sm font-medium text-white/72 shadow-[0_10px_26px_rgba(0,0,0,0.35)]">
               <button
                 type="button"
