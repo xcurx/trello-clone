@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -19,7 +20,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} antialiased`}>
-      <body className="h-screen w-screen overflow-hidden flex flex-col">{children}</body>
+      <body className="h-screen w-screen overflow-hidden flex flex-col">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
