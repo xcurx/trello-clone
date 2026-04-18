@@ -1,52 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Trello Clone
 
-## Getting Started
+A Kanban-style project management app inspired by Trello.
 
-First, run the development server:
+## Tech Stack
+
+- Frontend: Next.js 16 (App Router), React 19, TypeScript
+- Styling: Tailwind CSS v4
+- Drag and drop: dnd-kit
+- API layer: Next.js Route Handlers
+- Database: PostgreSQL
+- ORM: Prisma
+- Validation: Zod
+- File storage: Supabase Storage
+- Utilities: date-fns, lucide-react, clsx, tailwind-merge
+- Formatting and linting: Biome
+
+## Core Features
+
+- Boards, lists, and cards management
+- Drag and drop for lists and cards
+- Card details modal
+- Labels, members, due date, checklist, comments
+- Card covers and board backgrounds (color and image)
+- Card attachments
+- Board search and starring
+
+## Setup Instructions
+
+### Prerequisites
+
+- Node.js 20+
+- pnpm
+- PostgreSQL database
+- Supabase project (for file storage)
+
+### 1. Install dependencies
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configure environment variables
 
-## Supabase Storage Setup
-
-File uploads (board background images, card cover images, and card attachments)
-use Supabase Storage.
-
-Set these environment variables in your local `.env`:
+Create a local `.env` file in the project root:
 
 ```bash
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DB_NAME"
 NEXT_PUBLIC_SUPABASE_URL="https://YOUR_PROJECT_REF.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY="YOUR_SUPABASE_SERVICE_ROLE_KEY"
-SUPABASE_STORAGE_BUCKET="trello-assets"
+SUPABASE_STORAGE_BUCKET="trello"
 ```
 
-Create a storage bucket named `trello-assets` in Supabase and mark it as
-public if you want direct file URLs to work without signed URL generation.
+Notes:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `SUPABASE_URL` can be used as an alternative to `NEXT_PUBLIC_SUPABASE_URL`.
+- The storage bucket should be public if you want direct public URLs for uploaded files.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. Generate Prisma client and prepare database
 
-## Learn More
+```bash
+pnpm db:generate
+pnpm db:push
+pnpm db:seed
+```
 
-To learn more about Next.js, take a look at the following resources:
+### 4. Start development server
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+pnpm dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Open http://localhost:3000
 
-## Deploy on Vercel
+## Useful Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `pnpm dev` - start development server
+- `pnpm dev:clean` - clear `.next` and start dev server
+- `pnpm build` - production build
+- `pnpm start` - run production server
+- `pnpm lint` - run Biome checks
+- `pnpm format` - format code with Biome
+- `pnpm db:generate` - generate Prisma client
+- `pnpm db:push` - push Prisma schema to database
+- `pnpm db:migrate` - run Prisma migrate dev
+- `pnpm db:seed` - seed sample data
+- `pnpm db:studio` - open Prisma Studio
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deployment Notes (Vercel)
+
+- Install command: `pnpm install --frozen-lockfile`
+- Build command: `pnpm build`
+- Required environment variables:
+	- `DATABASE_URL`
+	- `NEXT_PUBLIC_SUPABASE_URL` (or `SUPABASE_URL`)
+	- `SUPABASE_SERVICE_ROLE_KEY`
+	- `SUPABASE_STORAGE_BUCKET`
+
+## Assumptions Made
+
+- Authentication is not implemented. A default seeded user is treated as logged in.
+- The default user id is `default-user`.
+- One shared workspace context is used for seeded/demo flows.
+- Supabase bucket is expected to exist before uploads.
+- Uploaded files are stored in Supabase and served via public URL.
+- Database schema setup in local/dev is done via `pnpm db:push`.
